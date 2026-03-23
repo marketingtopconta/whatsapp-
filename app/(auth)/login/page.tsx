@@ -165,7 +165,7 @@ function LoginForm() {
 
       {/* Footer */}
       <p className="text-center text-[var(--ds-text-muted)] text-sm mt-6">
-        Topconta © {new Date().getFullYear()}
+        Topconta © {new Date().getFullYear()} | by luandooria
       </p>
     </div>
   )
