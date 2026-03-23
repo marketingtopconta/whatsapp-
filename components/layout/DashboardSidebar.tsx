@@ -2,7 +2,6 @@
 
 import { memo, useCallback } from 'react'
 import {
-  Zap,
   ChevronLeft,
   ChevronRight,
   Plus,
@@ -124,7 +123,7 @@ const CompactSidebar = memo(function CompactSidebar({
           role="img"
           aria-label="Logo Topconta"
         >
-          <Zap className="text-white" size={18} fill="currentColor" aria-hidden="true" />
+          <span className="text-white font-bold text-base">T</span>
         </div>
         <nav className="flex flex-1 flex-col items-center gap-1.5 pt-1" aria-label="Menu principal">
           {navItems.map((item) => {
@@ -244,7 +243,7 @@ const ExpandedSidebar = memo(function ExpandedSidebar({
             role="img"
             aria-label="Logo Topconta"
           >
-            <Zap className="text-white" size={20} fill="currentColor" aria-hidden="true" />
+            <span className="text-white font-bold text-lg">T</span>
           </div>
           <div>
             <span className="text-xl font-bold text-[var(--ds-text-primary)] tracking-tight block">Topconta</span>
