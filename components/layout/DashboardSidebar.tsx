@@ -119,9 +119,10 @@ const CompactSidebar = memo(function CompactSidebar({
           <ChevronRight size={14} aria-hidden="true" />
         </button>
         <div
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--ds-border-default)] bg-linear-to-br from-primary-600 to-primary-800 shadow-lg shadow-primary-900/20"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--ds-border-default)] shadow-lg"
+          style={{ background: '#ff8814' }}
           role="img"
-          aria-label="Logo SmartZap"
+          aria-label="Logo Topconta"
         >
           <Zap className="text-white" size={18} fill="currentColor" aria-hidden="true" />
         </div>
@@ -238,14 +239,15 @@ const ExpandedSidebar = memo(function ExpandedSidebar({
       <div className="flex h-full flex-col p-4">
         <div className="h-16 flex items-center px-2 mb-6">
           <div
-            className="w-10 h-10 bg-linear-to-br from-primary-600 to-primary-800 rounded-xl flex items-center justify-center mr-3 shadow-lg shadow-primary-900/20 border border-[var(--ds-border-default)]"
+            className="w-10 h-10 rounded-xl flex items-center justify-center mr-3 shadow-lg border border-[var(--ds-border-default)]"
+            style={{ background: '#ff8814' }}
             role="img"
-            aria-label="Logo SmartZap"
+            aria-label="Logo Topconta"
           >
             <Zap className="text-white" size={20} fill="currentColor" aria-hidden="true" />
           </div>
           <div>
-            <span className="text-xl font-bold text-[var(--ds-text-primary)] tracking-tight block">SmartZap</span>
+            <span className="text-xl font-bold text-[var(--ds-text-primary)] tracking-tight block">Topconta</span>
           </div>
           <button
             type="button"
@@ -351,11 +353,11 @@ const ExpandedSidebar = memo(function ExpandedSidebar({
               aria-hidden="true"
             >
               <span className="text-lg font-bold text-primary-600 dark:text-primary-400">
-                {(companyName || 'SmartZap').charAt(0).toUpperCase()}
+                {(companyName || 'Topconta').charAt(0).toUpperCase()}
               </span>
             </div>
             <div className="flex-1 min-w-0 text-left">
-              <p className="text-sm font-medium text-[var(--ds-text-primary)] truncate">{companyName || 'SmartZap'}</p>
+              <p className="text-sm font-medium text-[var(--ds-text-primary)] truncate">{companyName || 'Topconta'}</p>
               <p className="text-xs text-[var(--ds-text-muted)] truncate">Administrador</p>
             </div>
             {isLoggingOut ? (

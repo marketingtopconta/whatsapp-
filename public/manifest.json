@@ -1,13 +1,13 @@
 {
-  "name": "SmartZap Atendimento",
-  "short_name": "SmartZap",
+  "name": "Topconta Atendimento",
+  "short_name": "Topconta",
   "description": "Central de atendimento WhatsApp com IA",
   "start_url": "/atendimento",
   "scope": "/atendimento",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#18181b",
-  "theme_color": "#22c55e",
+  "theme_color": "#ff8814",
   "icons": [
     {
       "src": "/icons/icon-192.png",

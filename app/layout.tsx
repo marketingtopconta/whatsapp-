@@ -11,7 +11,7 @@ const inter = Inter({
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#22c55e' },
+    { media: '(prefers-color-scheme: light)', color: '#ff8814' },
     { media: '(prefers-color-scheme: dark)', color: '#18181b' },
   ],
   width: 'device-width',
@@ -22,7 +22,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'SmartZap - WhatsApp Manager',
+  title: 'Topconta - WhatsApp Manager',
   description: 'Plataforma de automação de marketing via WhatsApp',
   manifest: '/manifest.json',
   icons: {
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'SmartZap',
+    title: 'Topconta',
   },
   formatDetection: {
     telephone: false,
