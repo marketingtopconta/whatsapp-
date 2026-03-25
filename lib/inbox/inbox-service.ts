@@ -158,21 +158,17 @@ export async function sendMessage(
     }
   }
 
-  // Persist the message
+  // Persist the message with correct delivery status from the start
+  // Bug fix: updateMessageDeliveryStatus queries by whatsapp_message_id, so we can't use
+  // message.id (DB UUID) to mark as failed. Set the status directly on create instead.
   const message = await createMessage({
     conversation_id: conversationId,
     direction: 'outbound',
     content,
     message_type: messageType,
     whatsapp_message_id: whatsappResult.messageId,
+    delivery_status: whatsappResult.error ? 'failed' : (whatsappResult.messageId ? 'sent' : 'pending'),
   })
-
-  // Update delivery status based on send result
-  if (whatsappResult.error) {
-    await updateMessageDeliveryStatus(message.id, 'failed')
-  } else if (whatsappResult.messageId) {
-    await updateMessageDeliveryStatus(whatsappResult.messageId, 'sent')
-  }
 
   return message
 }
