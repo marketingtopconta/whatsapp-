@@ -13,8 +13,23 @@ if (process.env.NODE_ENV !== 'production') {
 
 const isProd = process.env.NODE_ENV === 'production'
 
-// Security hardening: baseline headers that reduce attack surface without breaking common app behavior.
-// Note: CSP is intentionally not set here to avoid accidental breakage; if needed, add it iteratively.
+// Content Security Policy para prevenir XSS.
+// Permite scripts do próprio domínio + inline necessário para Next.js (nonce ideal mas complexo).
+// Para uso bancário: fortaleça removendo 'unsafe-inline' e usando nonce por requisição.
+const cspDirectives = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // unsafe-eval necessário para Next.js dev; remover em prod se possível
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://graph.facebook.com https://api.openai.com https://generativelanguage.googleapis.com",
+  "frame-ancestors 'none'", // Proteção extra contra clickjacking (mais forte que X-Frame-Options)
+  "form-action 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+].join('; ')
+
+// Security hardening: headers que reduzem a superfície de ataque.
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
@@ -22,6 +37,8 @@ const securityHeaders = [
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
   { key: 'X-DNS-Prefetch-Control', value: 'off' },
   { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+  { key: 'Content-Security-Policy', value: cspDirectives },
+  // HSTS em todos os ambientes de produção e staging
   ...(isProd
     ? [{ key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' }]
     : []),

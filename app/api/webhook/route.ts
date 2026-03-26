@@ -100,8 +100,9 @@ async function sendExternalWebhook(payload: Record<string, unknown>): Promise<vo
 
 function verifyMetaWebhookSignature(input: { request: NextRequest; rawBody: string }): boolean {
   const appSecret = String(process.env.META_APP_SECRET || '').trim()
-  // Compatibility mode: if not configured, do not block (but once configured, enforce).
-  if (!appSecret) return true
+  // Fail-closed: rejeita requisições se o secret não estiver configurado.
+  // Para uso bancário, META_APP_SECRET é obrigatório.
+  if (!appSecret) return false
 
   const header =
     input.request.headers.get('x-hub-signature-256') ||

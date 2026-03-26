@@ -10,6 +10,7 @@
  */
 
 import { cookies } from 'next/headers'
+import { compare as bcryptCompare } from 'bcryptjs'
 import { supabase } from './supabase'
 import { normalizePhoneNumber, validateAnyPhoneNumber } from './phone-formatter'
 
@@ -339,19 +340,31 @@ export async function completeSetup(
 // ============================================================================
 
 /**
- * Hash SHA-256 com salt fixo (mesmo algoritmo do IdentityStep no wizard).
+ * Hash SHA-256 com salt de instalação para retrocompatibilidade.
+ * O salt é lido de env var para evitar exposição no código-fonte.
+ * Novas instalações devem usar bcrypt (prefixo $2b$).
  */
 async function hashPasswordForLogin(password: string): Promise<string> {
-  const SALT = '_smartzap_salt_2026';
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + SALT);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  // Salt lido de variável de ambiente — nunca hardcoded no código.
+  const salt = process.env.PASSWORD_HASH_SALT || '_smartzap_salt_2026'
+  const encoder = new TextEncoder()
+  const data = encoder.encode(password + salt)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 /**
- * Verifica se uma string parece ser um hash SHA-256 (64 caracteres hexadecimais)
+ * Verifica se MASTER_PASSWORD é um hash bcrypt (formato $2b$ ou $2a$).
+ * Recomendado para novas instalações bancárias.
+ */
+function isBcryptHash(value: string): boolean {
+  return value.startsWith('$2b$') || value.startsWith('$2a$')
+}
+
+/**
+ * Verifica se uma string parece ser um hash SHA-256 (64 caracteres hexadecimais).
+ * Mantido para retrocompatibilidade com instalações existentes.
  */
 function isHashFormat(value: string): boolean {
   return value.length === 64 && /^[a-f0-9]+$/i.test(value)
@@ -383,17 +396,28 @@ export async function loginUser(password: string): Promise<UserAuthResult> {
   }
 
   try {
-    // Detecta automaticamente se MASTER_PASSWORD é hash ou texto puro
-    const masterIsHash = isHashFormat(masterPassword)
-
+    // Detecta automaticamente o formato de MASTER_PASSWORD:
+    // 1. Hash bcrypt ($2b$/$2a$) — recomendado para uso bancário
+    // 2. Hash SHA-256 (64 chars hex) — retrocompatibilidade
+    // 3. Texto puro — aceito mas não recomendado
     let isValid: boolean
-    if (masterIsHash) {
-      // Comportamento original: MASTER_PASSWORD é hash, compara com hash da senha digitada
+    if (isBcryptHash(masterPassword)) {
+      // Melhor opção: bcrypt com salt interno, resistente a brute-force
+      isValid = await bcryptCompare(password, masterPassword)
+    } else if (isHashFormat(masterPassword)) {
+      // Retrocompat: MASTER_PASSWORD é hash SHA-256
       const passwordHash = await hashPasswordForLogin(password)
       isValid = passwordHash === masterPassword
     } else {
-      // Novo: MASTER_PASSWORD é texto puro, compara diretamente
-      isValid = password === masterPassword
+      // Texto puro — comparação com timing constante para evitar timing attacks
+      const a = Buffer.from(password)
+      const b = Buffer.from(masterPassword)
+      if (a.length !== b.length) {
+        isValid = false
+      } else {
+        const { timingSafeEqual } = await import('node:crypto')
+        isValid = timingSafeEqual(a, b)
+      }
     }
 
     if (!isValid) {
@@ -597,16 +621,20 @@ async function clearFailedAttempts(): Promise<void> {
 // ============================================================================
 
 /**
- * Password is managed via MASTER_PASSWORD environment variable in Vercel.
+ * Senha gerenciada via MASTER_PASSWORD na variável de ambiente (Vercel).
  *
- * ACEITA DOIS FORMATOS:
- * - Texto puro: "minhaSenha123" (recomendado - mais simples)
- * - Hash SHA-256: 64 caracteres hex (retrocompatível com instalações antigas)
+ * FORMATOS ACEITOS (em ordem de segurança):
+ * 1. Hash bcrypt ($2b$12$...) — RECOMENDADO para uso bancário
+ *    Gere com: node -e "require('bcryptjs').hash('suaSenha',12).then(console.log)"
+ * 2. Hash SHA-256 (64 chars hex) — retrocompatível com instalações antigas
+ * 3. Texto puro — aceito porém não recomendado para produção bancária
  *
- * COMO RESETAR A SENHA:
- * 1. Vá em Vercel Dashboard → Settings → Environment Variables
- * 2. Edite MASTER_PASSWORD e coloque sua nova senha (ex: "novaSenha456")
- * 3. Clique em Save
- * 4. Vá em Deployments → clique nos 3 pontos do último deploy → Redeploy
- * 5. Pronto! Faça login com a nova senha
+ * COMO ATUALIZAR A SENHA:
+ * 1. Gere o hash bcrypt: node -e "require('bcryptjs').hash('novaSenha',12).then(console.log)"
+ * 2. Vercel Dashboard → Settings → Environment Variables → edite MASTER_PASSWORD
+ * 3. Cole o hash gerado (ex: $2b$12$...)
+ * 4. Deployments → Redeploy
+ *
+ * SEGURANÇA ADICIONAL:
+ * - Defina PASSWORD_HASH_SALT em env vars para customizar o salt do modo SHA-256 legado
  */

@@ -13,7 +13,9 @@ import { Lock, Eye, EyeOff, LogIn } from 'lucide-react'
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirectTo = searchParams.get('redirect') || '/'
+  // Valida redirect para evitar Open Redirect attack (ex: ?redirect=https://evil.com)
+  const rawRedirect = searchParams.get('redirect') || '/'
+  const redirectTo = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : '/'
 
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)

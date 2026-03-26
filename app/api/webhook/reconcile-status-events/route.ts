@@ -14,13 +14,17 @@ function isAuthorized(req: NextRequest): boolean {
   const secret = (process.env.SMARTZAP_ADMIN_KEY || process.env.SMARTZAP_API_KEY || '').trim()
   if (!secret) return false
 
-  const q = req.nextUrl.searchParams.get('key')?.trim()
-  if (q && q === secret) return true
-
+  // Aceita apenas Authorization: Bearer header.
+  // Query params são proibidos pois ficam expostos em logs de proxy/servidor.
   const token = getBearerToken(req)
-  if (token && token === secret) return true
+  if (!token) return false
 
-  return false
+  const a = Buffer.from(token)
+  const b = Buffer.from(secret)
+  if (a.length !== b.length) return false
+
+  const { timingSafeEqual } = require('node:crypto')
+  return timingSafeEqual(a, b)
 }
 
 export async function POST(req: NextRequest) {
