@@ -413,6 +413,12 @@ export async function processChatAgent(
     if (memoryContext.systemPromptAddition) {
       systemPrompt += `\n\n${memoryContext.systemPromptAddition}`
     }
+
+    // Instrui o LLM a usar a base de conhecimento quando disponível
+    if (hasKnowledgeBase) {
+      systemPrompt += `\n\n## Base de Conhecimento\nVocê tem acesso a uma base de conhecimento com informações específicas da empresa. SEMPRE use a ferramenta searchKnowledgeBase ANTES de responder qualquer pergunta sobre a empresa, seus produtos, serviços, preços, políticas ou qualquer informação específica. Nunca invente informações que poderiam estar na base de conhecimento — consulte primeiro.`
+    }
+
     const responseSchema = getResponseSchema(handoffEnabled)
 
     console.log(`[chat-agent] Handoff enabled: ${handoffEnabled}`)
@@ -446,7 +452,7 @@ export async function processChatAgent(
 
     if (hasKnowledgeBase) {
       searchKnowledgeBaseTool = tool({
-        description: 'Busca informações na base de conhecimento do agente. Use para responder perguntas que precisam de dados específicos.',
+        description: 'Busca informações na base de conhecimento da empresa. Use SEMPRE que o usuário perguntar sobre a empresa, produtos, serviços, preços, políticas, procedimentos ou qualquer informação específica. Consulte esta ferramenta ANTES de responder.',
         inputSchema: z.object({
           query: z.string().describe('A pergunta ou termos de busca para encontrar informações relevantes'),
         }),

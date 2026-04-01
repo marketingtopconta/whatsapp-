@@ -374,6 +374,7 @@ export async function getAgentEmbeddingStats(agentId: string): Promise<{
 export async function hasIndexedContent(agentId: string): Promise<boolean> {
   const supabase = getSupabaseAdmin()
   if (!supabase) {
+    console.warn('[rag-store] hasIndexedContent: Supabase admin client não disponível — base de conhecimento desabilitada')
     return false
   }
 
@@ -387,5 +388,7 @@ export async function hasIndexedContent(agentId: string): Promise<boolean> {
     return false
   }
 
-  return (count ?? 0) > 0
+  const hasContent = (count ?? 0) > 0
+  console.log(`[rag-store] hasIndexedContent agentId=${agentId}: count=${count ?? 0}, hasContent=${hasContent}`)
+  return hasContent
 }
