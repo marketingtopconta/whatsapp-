@@ -53,7 +53,7 @@ export const DEFAULT_AI_FALLBACK: AiFallbackConfig = {
   enabled: false,
   order: ['google', 'openai', 'anthropic'],
   models: {
-    google: 'gemini-3-flash-preview',
+    google: 'gemini-2.5-flash',
     openai: 'gpt-5-mini',
     anthropic: 'claude-sonnet-4-5',
   },

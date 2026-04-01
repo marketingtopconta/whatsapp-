@@ -193,7 +193,7 @@ export type SupportResponse = z.infer<typeof supportResponseSchema>
 // Constants
 // =============================================================================
 
-const DEFAULT_MODEL_ID = 'gemini-3-flash-preview'
+const DEFAULT_MODEL_ID = 'gemini-2.5-flash'
 const DEFAULT_TEMPERATURE = 0.7
 const DEFAULT_MAX_TOKENS = 2048
 const AI_TIMEOUT_MS = 90_000 // 90 segundos - timeout para chamadas de IA (considera RAG + tools)

@@ -93,7 +93,7 @@ async function getAISettings(): Promise<AISettings> {
     // Default settings
     const defaultSettings: AISettings = {
         provider: 'google',
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash',
         apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || '',
         providerKeys: {
             google: process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || '',
