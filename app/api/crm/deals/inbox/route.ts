@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { normalizePhoneNumber } from '@/lib/phone-formatter'
+import type { InboxDealInfo } from '@/types'
 
 export const dynamic = 'force-dynamic'
-
-export interface InboxDealInfo {
-    deal_id: string
-    deal_title: string
-    stage_id: string
-    stage_name: string
-    stage_color: string
-    next_action_at: string | null
-}
+export type { InboxDealInfo }
 
 /**
  * GET /api/crm/deals/inbox?phones=+5511...&phones=+5522...

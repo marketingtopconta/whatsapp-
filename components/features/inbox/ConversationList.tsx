@@ -26,8 +26,7 @@ import {
 import { ConversationItem } from './ConversationItem'
 import { AttendantsPopover } from './AttendantsPopover'
 import { InboxSettingsPopover } from './InboxSettingsPopover'
-import type { InboxConversation, InboxLabel, ConversationStatus, ConversationMode } from '@/types'
-import type { InboxDealInfo } from '@/app/api/crm/deals/inbox/route'
+import type { InboxConversation, InboxLabel, ConversationStatus, ConversationMode, InboxDealInfo } from '@/types'
 
 export interface ConversationListProps {
   conversations: InboxConversation[]

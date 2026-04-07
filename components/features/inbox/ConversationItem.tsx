@@ -13,8 +13,7 @@
 import React, { memo } from 'react'
 import { cn } from '@/lib/utils'
 import { formatRelativeTime } from '@/lib/date-utils'
-import type { InboxConversation } from '@/types'
-import type { InboxDealInfo } from '@/app/api/crm/deals/inbox/route'
+import type { InboxConversation, InboxDealInfo } from '@/types'
 
 export interface ConversationItemProps {
   conversation: InboxConversation

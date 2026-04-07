@@ -964,3 +964,13 @@ export interface PipelineMetrics {
   lostDeals: number;
   conversionRate: number;
 }
+
+// Badge de deal exibido em cada conversa do Inbox
+export interface InboxDealInfo {
+  deal_id: string;
+  deal_title: string;
+  stage_id: string;
+  stage_name: string;
+  stage_color: string;
+  next_action_at: string | null;
+}
