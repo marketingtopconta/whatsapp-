@@ -11,7 +11,7 @@ const UpdateDealSchema = z.object({
     value: z.number().min(0).optional(),
     status: z.enum(['open', 'won', 'lost']).optional(),
     notes: z.string().optional().nullable(),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
     nextActionAt: z.string().datetime().optional().nullable(),
 })
 

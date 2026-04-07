@@ -364,7 +364,10 @@ export type RealtimeTable =
   | 'inbox_conversations'
   | 'inbox_messages'
   | 'ai_agents'
-  | 'ai_agent_logs';
+  | 'ai_agent_logs'
+  | 'pipeline_stages'
+  | 'deals'
+  | 'deal_activities';
 
 /**
  * Event types for Realtime subscriptions

@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 const CreateActivitySchema = z.object({
     type: z.enum(['note', 'call', 'whatsapp_sent', 'whatsapp_read', 'stage_change', 'system']),
     body: z.string().optional().nullable(),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
 /**

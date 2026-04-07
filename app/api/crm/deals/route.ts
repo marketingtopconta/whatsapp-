@@ -12,7 +12,7 @@ const CreateDealSchema = z.object({
     title: z.string().min(1).max(200),
     value: z.number().min(0).optional(),
     notes: z.string().optional().nullable(),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
 /**
