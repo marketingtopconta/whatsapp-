@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Search, SlidersHorizontal, Bot, User, X, Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
@@ -26,6 +27,7 @@ import { ConversationItem } from './ConversationItem'
 import { AttendantsPopover } from './AttendantsPopover'
 import { InboxSettingsPopover } from './InboxSettingsPopover'
 import type { InboxConversation, InboxLabel, ConversationStatus, ConversationMode } from '@/types'
+import type { InboxDealInfo } from '@/app/api/crm/deals/inbox/route'
 
 export interface ConversationListProps {
   conversations: InboxConversation[]
@@ -46,6 +48,15 @@ export interface ConversationListProps {
   onLabelFilterChange: (labelId: string | null) => void
 }
 
+async function fetchInboxDeals(phones: string[]): Promise<Record<string, InboxDealInfo>> {
+  if (phones.length === 0) return {}
+  const params = new URLSearchParams()
+  phones.forEach((p) => params.append('phones', p))
+  const res = await fetch(`/api/crm/deals/inbox?${params.toString()}`, { cache: 'no-store' })
+  if (!res.ok) return {}
+  return res.json()
+}
+
 export function ConversationList({
   conversations,
   selectedId,
@@ -63,6 +74,19 @@ export function ConversationList({
   onLabelFilterChange,
 }: ConversationListProps) {
   const [showFilters, setShowFilters] = useState(false)
+
+  // Coleta phones únicos para busca em lote de deals ativos
+  const phones = useMemo(
+    () => [...new Set(conversations.map((c) => c.phone).filter(Boolean))],
+    [conversations]
+  )
+
+  const { data: dealMap } = useQuery<Record<string, InboxDealInfo>>({
+    queryKey: ['crm', 'inbox-deals', phones],
+    queryFn: () => fetchInboxDeals(phones),
+    enabled: phones.length > 0,
+    staleTime: 60_000,
+  })
 
   // Active filter count
   const activeFilterCount = useMemo(() => {
@@ -280,6 +304,7 @@ export function ConversationList({
                 conversation={conversation}
                 isSelected={selectedId === conversation.id}
                 onClick={() => onSelect(conversation.id)}
+                dealBadge={dealMap?.[conversation.phone] ?? null}
               />
             ))}
           </div>

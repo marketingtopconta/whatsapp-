@@ -14,17 +14,20 @@ import React, { memo } from 'react'
 import { cn } from '@/lib/utils'
 import { formatRelativeTime } from '@/lib/date-utils'
 import type { InboxConversation } from '@/types'
+import type { InboxDealInfo } from '@/app/api/crm/deals/inbox/route'
 
 export interface ConversationItemProps {
   conversation: InboxConversation
   isSelected: boolean
   onClick: () => void
+  dealBadge?: InboxDealInfo | null
 }
 
 export const ConversationItem = memo(function ConversationItem({
   conversation,
   isSelected,
   onClick,
+  dealBadge,
 }: ConversationItemProps) {
   const {
     phone,
@@ -135,6 +138,27 @@ export const ConversationItem = memo(function ConversationItem({
             {labels.length > 3 && (
               <span className="text-[9px] text-[var(--ds-text-muted)]">+{labels.length - 3}</span>
             )}
+          </div>
+        )}
+
+        {/* Deal badge - CRM stage indicator */}
+        {dealBadge && (
+          <div className="flex items-center gap-1 mt-1">
+            <span
+              className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: dealBadge.stage_color + '22',
+                color: dealBadge.stage_color,
+                border: `1px solid ${dealBadge.stage_color}44`,
+              }}
+              title={dealBadge.deal_title}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: dealBadge.stage_color }}
+              />
+              {dealBadge.stage_name}
+            </span>
           </div>
         )}
       </div>

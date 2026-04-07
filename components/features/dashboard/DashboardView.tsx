@@ -11,6 +11,7 @@ import { Send, TrendingUp, AlertCircle, CheckCircle2, MoreHorizontal, ArrowUpRig
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from '@/components/ui/lazy-charts';
 import { Campaign, CampaignStatus } from '../../../types';
 import { DashboardStats } from '../../../services/dashboardService';
+import { PipelineFunnelWidget } from '@/components/features/crm/PipelineFunnelWidget';
 
 interface DashboardViewProps {
   stats: DashboardStats;
@@ -245,6 +246,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ stats, recentCampa
               Ver Todas <ArrowUpRight size={14} />
             </PrefetchLink>
           </div>
+        </Container>
+      </div>
+
+      {/* CRM Funnel Widget */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <Container variant="glass" padding="lg">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-heading-4 flex items-center gap-2">
+              <TrendingUp size={16} className="text-emerald-400" />
+              Funil CRM
+            </h3>
+          </div>
+          <PipelineFunnelWidget />
         </Container>
       </div>
     </Page>
