@@ -844,3 +844,123 @@ export interface UpdateAttendantTokenDTO {
   is_active?: boolean;
   expires_at?: string | null;
 }
+
+// =============================================================================
+// CRM — FUNIL DE VENDAS
+// =============================================================================
+
+export type DealStatus = 'open' | 'won' | 'lost';
+
+export type DealActivityType =
+  | 'note'
+  | 'call'
+  | 'whatsapp_sent'
+  | 'whatsapp_read'
+  | 'stage_change'
+  | 'system';
+
+export type DealActionOnReply = 'move_next' | 'stop' | 'none';
+
+/** Configuração de automação de funil por estágio */
+export interface FunnelStageConfig {
+  template_name?: string;
+  delay_hours?: number;
+  action_on_reply?: DealActionOnReply;
+}
+
+/** Estágio (coluna) do kanban de vendas */
+export interface PipelineStage {
+  id: string;
+  name: string;
+  order: number;
+  color: string;
+  funnelConfig: FunnelStageConfig;
+  dealsCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Oportunidade/lead no funil */
+export interface Deal {
+  id: string;
+  contactId: string | null;
+  stageId: string;
+  title: string;
+  value: number;
+  status: DealStatus;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  nextActionAt: string | null;
+  qstashMessageId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  wonAt: string | null;
+  lostAt: string | null;
+  // Campos joined
+  contact?: { id: string; name: string; phone: string } | null;
+  stage?: PipelineStage | null;
+}
+
+/** Evento/atividade registrado em um deal */
+export interface DealActivity {
+  id: string;
+  dealId: string;
+  type: DealActivityType;
+  body: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+// DTOs
+export interface CreatePipelineStageDTO {
+  name: string;
+  order?: number;
+  color?: string;
+  funnelConfig?: FunnelStageConfig;
+}
+
+export interface UpdatePipelineStageDTO {
+  name?: string;
+  order?: number;
+  color?: string;
+  funnelConfig?: FunnelStageConfig;
+}
+
+export interface CreateDealDTO {
+  contactId?: string | null;
+  stageId: string;
+  title: string;
+  value?: number;
+  notes?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateDealDTO {
+  stageId?: string;
+  title?: string;
+  value?: number;
+  status?: DealStatus;
+  notes?: string | null;
+  metadata?: Record<string, unknown>;
+  nextActionAt?: string | null;
+  qstashMessageId?: string | null;
+}
+
+export interface MoveDealDTO {
+  stageId: string;
+}
+
+export interface CreateDealActivityDTO {
+  type: DealActivityType;
+  body?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PipelineMetrics {
+  totalDeals: number;
+  totalValue: number;
+  wonDeals: number;
+  wonValue: number;
+  lostDeals: number;
+  conversionRate: number;
+}

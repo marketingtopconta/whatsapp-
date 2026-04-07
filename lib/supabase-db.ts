@@ -28,6 +28,16 @@ import {
     CreateCampaignFolderDTO,
     UpdateCampaignFolderDTO,
     CreateCampaignTagDTO,
+    PipelineStage,
+    Deal,
+    DealActivity,
+    DealStatus,
+    CreatePipelineStageDTO,
+    UpdatePipelineStageDTO,
+    CreateDealDTO,
+    UpdateDealDTO,
+    CreateDealActivityDTO,
+    PipelineMetrics,
 } from '../types'
 import { isSuppressionActive } from '@/lib/phone-suppressions'
 import { canonicalTemplateCategory } from '@/lib/template-category'
@@ -2631,6 +2641,320 @@ export const campaignTagDb = {
             .delete()
             .eq('campaign_id', campaignId)
             .eq('tag_id', tagId)
+
+        if (error) throw error
+    },
+}
+
+// =============================================================================
+// CRM — PIPELINE STAGES
+// =============================================================================
+
+function mapStage(row: any): PipelineStage {
+    return {
+        id: row.id,
+        name: row.name,
+        order: row.order,
+        color: row.color,
+        funnelConfig: row.funnel_config ?? {},
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+    }
+}
+
+export const pipelineStageDb = {
+    // Lista todos os estágios ordenados
+    getAll: async (): Promise<PipelineStage[]> => {
+        const { data, error } = await supabase
+            .from('pipeline_stages')
+            .select('*')
+            .order('order', { ascending: true })
+
+        if (error) throw error
+        return (data ?? []).map(mapStage)
+    },
+
+    // Busca um estágio por ID
+    getById: async (id: string): Promise<PipelineStage | null> => {
+        const { data, error } = await supabase
+            .from('pipeline_stages')
+            .select('*')
+            .eq('id', id)
+            .single()
+
+        if (error) {
+            if (error.code === 'PGRST116') return null
+            throw error
+        }
+        return data ? mapStage(data) : null
+    },
+
+    // Cria um estágio
+    create: async (dto: CreatePipelineStageDTO): Promise<PipelineStage> => {
+        // Determina a ordem máxima atual para auto-append
+        let order = dto.order
+        if (order === undefined) {
+            const { data: last } = await supabase
+                .from('pipeline_stages')
+                .select('order')
+                .order('order', { ascending: false })
+                .limit(1)
+                .single()
+            order = last ? (last.order as number) + 1 : 0
+        }
+
+        const { data, error } = await supabase
+            .from('pipeline_stages')
+            .insert({
+                name: dto.name,
+                order,
+                color: dto.color ?? '#6366f1',
+                funnel_config: dto.funnelConfig ?? {},
+            })
+            .select()
+            .single()
+
+        if (error) throw error
+        return mapStage(data)
+    },
+
+    // Atualiza um estágio
+    update: async (id: string, dto: UpdatePipelineStageDTO): Promise<PipelineStage> => {
+        const updates: Record<string, unknown> = {}
+        if (dto.name !== undefined)        updates.name = dto.name
+        if (dto.order !== undefined)       updates.order = dto.order
+        if (dto.color !== undefined)       updates.color = dto.color
+        if (dto.funnelConfig !== undefined) updates.funnel_config = dto.funnelConfig
+
+        const { data, error } = await supabase
+            .from('pipeline_stages')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single()
+
+        if (error) throw error
+        return mapStage(data)
+    },
+
+    // Remove um estágio (falha se houver deals vinculados)
+    delete: async (id: string): Promise<void> => {
+        const { error } = await supabase
+            .from('pipeline_stages')
+            .delete()
+            .eq('id', id)
+
+        if (error) throw error
+    },
+}
+
+// =============================================================================
+// CRM — DEALS
+// =============================================================================
+
+function mapDeal(row: any): Deal {
+    return {
+        id: row.id,
+        contactId: row.contact_id ?? null,
+        stageId: row.stage_id,
+        title: row.title,
+        value: Number(row.value ?? 0),
+        status: (row.status ?? 'open') as DealStatus,
+        notes: row.notes ?? null,
+        metadata: row.metadata ?? {},
+        nextActionAt: row.next_action_at ?? null,
+        qstashMessageId: row.qstash_message_id ?? null,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        wonAt: row.won_at ?? null,
+        lostAt: row.lost_at ?? null,
+        // Joined
+        contact: row.contacts
+            ? { id: row.contacts.id, name: row.contacts.name, phone: row.contacts.phone }
+            : null,
+        stage: row.pipeline_stages ? mapStage(row.pipeline_stages) : null,
+    }
+}
+
+export const dealDb = {
+    // Lista deals com filtros opcionais
+    list: async (opts: {
+        stageId?: string
+        status?: DealStatus | string
+        contactId?: string
+        limit?: number
+        offset?: number
+    } = {}): Promise<{ data: Deal[]; total: number }> => {
+        const limit = Math.min(opts.limit ?? 100, 500)
+        const offset = opts.offset ?? 0
+
+        let query = supabase
+            .from('deals')
+            .select(
+                '*, contacts(id, name, phone), pipeline_stages(*)',
+                { count: 'exact' }
+            )
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1)
+
+        if (opts.stageId)   query = query.eq('stage_id', opts.stageId)
+        if (opts.status)    query = query.eq('status', opts.status)
+        if (opts.contactId) query = query.eq('contact_id', opts.contactId)
+
+        const { data, error, count } = await query
+        if (error) throw error
+
+        return {
+            data: (data ?? []).map(mapDeal),
+            total: count ?? 0,
+        }
+    },
+
+    // Busca um deal por ID
+    getById: async (id: string): Promise<Deal | null> => {
+        const { data, error } = await supabase
+            .from('deals')
+            .select('*, contacts(id, name, phone), pipeline_stages(*)')
+            .eq('id', id)
+            .single()
+
+        if (error) {
+            if (error.code === 'PGRST116') return null
+            throw error
+        }
+        return data ? mapDeal(data) : null
+    },
+
+    // Cria um deal
+    create: async (dto: CreateDealDTO): Promise<Deal> => {
+        const { data, error } = await supabase
+            .from('deals')
+            .insert({
+                contact_id: dto.contactId ?? null,
+                stage_id: dto.stageId,
+                title: dto.title,
+                value: dto.value ?? 0,
+                notes: dto.notes ?? null,
+                metadata: dto.metadata ?? {},
+            })
+            .select('*, contacts(id, name, phone), pipeline_stages(*)')
+            .single()
+
+        if (error) throw error
+        return mapDeal(data)
+    },
+
+    // Atualiza um deal (campos parciais)
+    update: async (id: string, dto: UpdateDealDTO): Promise<Deal> => {
+        const updates: Record<string, unknown> = {}
+        if (dto.stageId !== undefined)        updates.stage_id = dto.stageId
+        if (dto.title !== undefined)          updates.title = dto.title
+        if (dto.value !== undefined)          updates.value = dto.value
+        if (dto.notes !== undefined)          updates.notes = dto.notes
+        if (dto.metadata !== undefined)       updates.metadata = dto.metadata
+        if (dto.nextActionAt !== undefined)   updates.next_action_at = dto.nextActionAt
+        if (dto.qstashMessageId !== undefined) updates.qstash_message_id = dto.qstashMessageId
+
+        if (dto.status !== undefined) {
+            updates.status = dto.status
+            if (dto.status === 'won')  updates.won_at = new Date().toISOString()
+            if (dto.status === 'lost') updates.lost_at = new Date().toISOString()
+        }
+
+        const { data, error } = await supabase
+            .from('deals')
+            .update(updates)
+            .eq('id', id)
+            .select('*, contacts(id, name, phone), pipeline_stages(*)')
+            .single()
+
+        if (error) throw error
+        return mapDeal(data)
+    },
+
+    // Move deal para outro estágio (registra atividade automaticamente)
+    move: async (id: string, newStageId: string, oldStageId: string): Promise<Deal> => {
+        const deal = await dealDb.update(id, { stageId: newStageId })
+
+        // Registra atividade de mudança de estágio
+        await dealActivityDb.create(id, {
+            type: 'stage_change',
+            body: null,
+            metadata: { from_stage_id: oldStageId, to_stage_id: newStageId },
+        })
+
+        return deal
+    },
+
+    // Remove um deal e todas as suas atividades (CASCADE no DB)
+    delete: async (id: string): Promise<void> => {
+        const { error } = await supabase
+            .from('deals')
+            .delete()
+            .eq('id', id)
+
+        if (error) throw error
+    },
+
+    // Métricas gerais do pipeline
+    getMetrics: async (): Promise<PipelineMetrics> => {
+        const { data, error } = await supabase.rpc('get_pipeline_metrics')
+        if (error) throw error
+        return data as PipelineMetrics
+    },
+}
+
+// =============================================================================
+// CRM — DEAL ACTIVITIES
+// =============================================================================
+
+function mapActivity(row: any): DealActivity {
+    return {
+        id: row.id,
+        dealId: row.deal_id,
+        type: row.type,
+        body: row.body ?? null,
+        metadata: row.metadata ?? {},
+        createdAt: row.created_at,
+    }
+}
+
+export const dealActivityDb = {
+    // Lista atividades de um deal (mais recentes primeiro)
+    listByDeal: async (dealId: string): Promise<DealActivity[]> => {
+        const { data, error } = await supabase
+            .from('deal_activities')
+            .select('*')
+            .eq('deal_id', dealId)
+            .order('created_at', { ascending: false })
+
+        if (error) throw error
+        return (data ?? []).map(mapActivity)
+    },
+
+    // Cria uma atividade
+    create: async (dealId: string, dto: CreateDealActivityDTO): Promise<DealActivity> => {
+        const { data, error } = await supabase
+            .from('deal_activities')
+            .insert({
+                deal_id: dealId,
+                type: dto.type,
+                body: dto.body ?? null,
+                metadata: dto.metadata ?? {},
+            })
+            .select()
+            .single()
+
+        if (error) throw error
+        return mapActivity(data)
+    },
+
+    // Remove uma atividade
+    delete: async (id: string): Promise<void> => {
+        const { error } = await supabase
+            .from('deal_activities')
+            .delete()
+            .eq('id', id)
 
         if (error) throw error
     },
