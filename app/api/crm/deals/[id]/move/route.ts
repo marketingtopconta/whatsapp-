@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dealDb } from '@/lib/supabase-db'
-import { verifyApiKey } from '@/lib/auth'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -17,10 +16,6 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const auth = await verifyApiKey(request)
-    if (!auth.valid) {
-        return NextResponse.json({ error: auth.error }, { status: 401 })
-    }
 
     const { id } = await params
 

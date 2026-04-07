@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyApiKey } from '@/lib/auth'
 import { cancelFunnelSchedule } from '@/lib/funnel-executor'
 import { dealDb, dealActivityDb } from '@/lib/supabase-db'
 import { z } from 'zod'
@@ -23,10 +22,6 @@ const StopFunnelSchema = z.object({
  * Body: { dealId: string, reason?: string }
  */
 export async function POST(request: NextRequest) {
-    const auth = await verifyApiKey(request)
-    if (!auth.valid) {
-        return NextResponse.json({ error: auth.error }, { status: 401 })
-    }
 
     let body: unknown
     try {

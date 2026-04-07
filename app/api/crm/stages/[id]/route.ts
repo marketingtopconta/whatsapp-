@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pipelineStageDb } from '@/lib/supabase-db'
-import { verifyApiKey } from '@/lib/auth'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -24,10 +23,6 @@ export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const auth = await verifyApiKey(request)
-    if (!auth.valid) {
-        return NextResponse.json({ error: auth.error }, { status: 401 })
-    }
 
     const { id } = await params
 
@@ -51,10 +46,6 @@ export async function PUT(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const auth = await verifyApiKey(request)
-    if (!auth.valid) {
-        return NextResponse.json({ error: auth.error }, { status: 401 })
-    }
 
     const { id } = await params
 
@@ -89,10 +80,6 @@ export async function DELETE(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const auth = await verifyApiKey(request)
-    if (!auth.valid) {
-        return NextResponse.json({ error: auth.error }, { status: 401 })
-    }
 
     const { id } = await params
 

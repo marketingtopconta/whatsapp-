@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pipelineStageDb } from '@/lib/supabase-db'
-import { verifyApiKey } from '@/lib/auth'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
@@ -21,10 +20,6 @@ const CreateStageSchema = z.object({
  * Lista todos os estágios do pipeline
  */
 export async function GET(request: NextRequest) {
-    const auth = await verifyApiKey(request)
-    if (!auth.valid) {
-        return NextResponse.json({ error: auth.error }, { status: 401 })
-    }
 
     try {
         const stages = await pipelineStageDb.getAll()
@@ -40,10 +35,6 @@ export async function GET(request: NextRequest) {
  * Cria um novo estágio
  */
 export async function POST(request: NextRequest) {
-    const auth = await verifyApiKey(request)
-    if (!auth.valid) {
-        return NextResponse.json({ error: auth.error }, { status: 401 })
-    }
 
     try {
         const body = await request.json()

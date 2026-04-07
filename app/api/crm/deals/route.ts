@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dealDb } from '@/lib/supabase-db'
-import { verifyApiKey } from '@/lib/auth'
 import { z } from 'zod'
 import type { DealStatus } from '@/types'
 
@@ -20,10 +19,6 @@ const CreateDealSchema = z.object({
  * Lista deals com filtros opcionais: stageId, status, contactId, limit, offset
  */
 export async function GET(request: NextRequest) {
-    const auth = await verifyApiKey(request)
-    if (!auth.valid) {
-        return NextResponse.json({ error: auth.error }, { status: 401 })
-    }
 
     const url = new URL(request.url)
     const stageId = url.searchParams.get('stageId') || undefined
@@ -46,10 +41,6 @@ export async function GET(request: NextRequest) {
  * Cria um novo deal
  */
 export async function POST(request: NextRequest) {
-    const auth = await verifyApiKey(request)
-    if (!auth.valid) {
-        return NextResponse.json({ error: auth.error }, { status: 401 })
-    }
 
     try {
         const body = await request.json()

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyApiKey } from '@/lib/auth'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -38,10 +37,6 @@ export interface PipelineMetricsResponse {
  * Chamado pelo dashboard e pelo widget de funil.
  */
 export async function GET(request: NextRequest) {
-    const auth = await verifyApiKey(request)
-    if (!auth.valid) {
-        return NextResponse.json({ error: auth.error }, { status: 401 })
-    }
 
     try {
         const supabase = getSupabaseAdmin()
