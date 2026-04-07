@@ -1,238 +1,223 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Trash2, RefreshCw } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import Link from 'next/link'
+import { RefreshCw, Settings2, Plus, BarChart3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-} from '@/components/ui/dialog'
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Page, PageDescription, PageHeader, PageTitle } from '@/components/ui/page'
-import { StageConfigPanel } from '@/components/features/crm/StageConfigPanel'
-import { useCRMStages } from '@/hooks/useCRMStages'
-import type { FunnelStageConfig } from '@/types'
+import { Page, PageHeader, PageTitle, PageDescription } from '@/components/ui/page'
+import { KanbanBoard } from '@/components/features/crm/KanbanBoard'
+import { DealDetailPanel } from '@/components/features/crm/DealDetailPanel'
+import { CreateDealDialog } from '@/components/features/crm/CreateDealDialog'
+import { useCRM } from '@/hooks/useCRM'
+import type { Deal } from '@/types'
 
 // ---------------------------------------------------------------------------
-// Paleta de cores rápida para criação de estágio
+// Métricas compactas
 // ---------------------------------------------------------------------------
 
-const PRESET_COLORS = [
-    '#6366f1', '#f59e0b', '#3b82f6', '#8b5cf6',
-    '#10b981', '#ef4444', '#ec4899', '#14b8a6',
-]
-
-// ---------------------------------------------------------------------------
-// Página
-// ---------------------------------------------------------------------------
-
-export default function CRMPage() {
-    const {
-        stages,
-        isLoading,
-        refetch,
-        createStage,
-        saveFunnelConfig,
-        deleteStage,
-        isSaving,
-        isDeleting,
-    } = useCRMStages()
-
-    // Estado do modal de criação
-    const [showCreate, setShowCreate] = useState(false)
-    const [newStageName, setNewStageName] = useState('')
-    const [newStageColor, setNewStageColor] = useState(PRESET_COLORS[0])
-
-    // Estado do confirm de deleção
-    const [stageToDelete, setStageToDelete] = useState<string | null>(null)
-
-    function handleCreate() {
-        if (!newStageName.trim()) return
-        createStage({ name: newStageName.trim(), color: newStageColor })
-        setNewStageName('')
-        setNewStageColor(PRESET_COLORS[0])
-        setShowCreate(false)
-    }
-
-    function handleSaveFunnelConfig(stageId: string, config: FunnelStageConfig) {
-        saveFunnelConfig(stageId, config)
-    }
+function MetricsBar({ allDeals }: { allDeals: Deal[] }) {
+    const open = allDeals.filter((d) => d.status === 'open')
+    const won = allDeals.filter((d) => d.status === 'won')
+    const lost = allDeals.filter((d) => d.status === 'lost')
+    const totalOpen = open.reduce((s, d) => s + (d.value ?? 0), 0)
+    const total = won.length + lost.length
+    const rate = total > 0 ? Math.round((won.length / total) * 100) : 0
 
     return (
-        <Page>
-            <PageHeader>
+        <div className="flex flex-wrap gap-4 text-sm text-zinc-400">
+            <span>
+                <span className="font-semibold text-zinc-200">{open.length}</span> abertos
+            </span>
+            {totalOpen > 0 && (
+                <span>
+                    R${' '}
+                    <span className="font-semibold text-emerald-400">
+                        {totalOpen.toLocaleString('pt-BR')}
+                    </span>{' '}
+                    em aberto
+                </span>
+            )}
+            <span>
+                <span className="font-semibold text-emerald-400">{won.length}</span> ganhos
+            </span>
+            <span>
+                <span className="font-semibold text-red-400">{lost.length}</span> perdidos
+            </span>
+            {total > 0 && (
+                <span>
+                    Conversão:{' '}
+                    <span className="font-semibold text-zinc-200">{rate}%</span>
+                </span>
+            )}
+        </div>
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Página principal — Kanban CRM
+// ---------------------------------------------------------------------------
+
+export default function CRMKanbanPage() {
+    const {
+        stages,
+        allDeals,
+        dealsByStage,
+        isLoading,
+        createDeal,
+        moveDeal,
+        updateDeal,
+        markWon,
+        markLost,
+        deleteDeal,
+        isCreating,
+        refetch,
+    } = useCRM()
+
+    // Painel lateral de detalhes
+    const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
+
+    // Dialog de criação
+    const [createDialogOpen, setCreateDialogOpen] = useState(false)
+    const [defaultStageId, setDefaultStageId] = useState<string | undefined>(undefined)
+
+    const handleDealClick = useCallback((deal: Deal) => {
+        setSelectedDeal(deal)
+    }, [])
+
+    const handleAddDeal = useCallback((stageId: string) => {
+        setDefaultStageId(stageId)
+        setCreateDialogOpen(true)
+    }, [])
+
+    const handleMoveDeal = useCallback(
+        (dealId: string, stageId: string) => {
+            moveDeal(dealId, stageId)
+            // Atualiza o deal selecionado no painel se for o mesmo
+            setSelectedDeal((prev) =>
+                prev?.id === dealId ? { ...prev, stageId } : prev
+            )
+        },
+        [moveDeal]
+    )
+
+    return (
+        <Page className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden pb-0">
+            {/* Cabeçalho */}
+            <PageHeader className="shrink-0 pb-3">
                 <div>
-                    <PageTitle>Funil de Vendas — Configuração</PageTitle>
-                    <PageDescription>
-                        Configure o template WhatsApp, delay e ação ao responder para cada estágio do funil automático.
+                    <PageTitle>Funil CRM</PageTitle>
+                    <PageDescription className="sr-only">
+                        Board drag-and-drop com atualização em tempo real
                     </PageDescription>
+                    {!isLoading && <MetricsBar allDeals={allDeals} />}
                 </div>
                 <div className="flex items-center gap-2">
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => refetch()}
+                        onClick={refetch}
                         disabled={isLoading}
                         className="border-zinc-700 text-zinc-400 hover:text-zinc-100"
                     >
-                        <RefreshCw className={`h-4 w-4 mr-1.5 ${isLoading ? 'animate-spin' : ''}`} />
-                        Atualizar
+                        <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="border-zinc-700 text-zinc-400 hover:text-zinc-100"
+                    >
+                        <Link href="/crm/config">
+                            <Settings2 className="h-4 w-4 mr-1.5" />
+                            Configurar Funil
+                        </Link>
                     </Button>
                     <Button
                         size="sm"
-                        onClick={() => setShowCreate(true)}
+                        onClick={() => {
+                            setDefaultStageId(stages[0]?.id)
+                            setCreateDialogOpen(true)
+                        }}
+                        disabled={stages.length === 0}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white"
                     >
                         <Plus className="h-4 w-4 mr-1.5" />
-                        Novo estágio
+                        Novo Deal
                     </Button>
                 </div>
             </PageHeader>
 
-            {/* Conteúdo */}
-            <div className="max-w-2xl space-y-3">
-                {isLoading && (
-                    <div className="py-12 text-center text-zinc-500 text-sm">
-                        Carregando estágios…
-                    </div>
-                )}
-
-                {!isLoading && stages.length === 0 && (
-                    <div className="py-12 text-center space-y-3">
-                        <p className="text-zinc-400 text-sm">Nenhum estágio configurado.</p>
-                        <Button
-                            size="sm"
-                            onClick={() => setShowCreate(true)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                        >
-                            <Plus className="h-4 w-4 mr-1.5" />
-                            Criar primeiro estágio
-                        </Button>
-                    </div>
-                )}
-
-                {stages.map((stage) => (
-                    <div key={stage.id} className="relative group">
-                        <StageConfigPanel
-                            stage={stage}
-                            onSave={handleSaveFunnelConfig}
-                            isSaving={isSaving}
-                        />
-                        {/* Botão de deletar (aparece no hover) */}
-                        <button
-                            onClick={() => setStageToDelete(stage.id)}
-                            className="absolute top-3 right-10 hidden group-hover:flex items-center justify-center h-6 w-6 rounded text-zinc-600 hover:text-red-400 hover:bg-zinc-700 transition-colors"
-                            title="Remover estágio"
-                        >
-                            <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                    </div>
-                ))}
-            </div>
-
-            {/* Modal: criar estágio */}
-            <Dialog open={showCreate} onOpenChange={setShowCreate}>
-                <DialogContent className="bg-zinc-900 border-zinc-700 text-zinc-100 max-w-sm">
-                    <DialogHeader>
-                        <DialogTitle>Novo estágio</DialogTitle>
-                    </DialogHeader>
-
-                    <div className="space-y-4 py-2">
-                        <div className="space-y-1.5">
-                            <Label className="text-xs text-zinc-400">Nome do estágio</Label>
-                            <Input
-                                autoFocus
-                                placeholder="Ex: Em negociação"
-                                value={newStageName}
-                                onChange={(e) => setNewStageName(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                                className="bg-zinc-800 border-zinc-700 text-zinc-100"
+            {/* Board + painel lateral */}
+            <div className="flex flex-1 gap-0 overflow-hidden min-h-0">
+                {/* Kanban Board */}
+                <div
+                    className={`flex-1 overflow-hidden transition-all duration-300 ${
+                        selectedDeal ? 'pr-0' : ''
+                    }`}
+                >
+                    {isLoading ? (
+                        <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
+                            Carregando funil…
+                        </div>
+                    ) : (
+                        <div className="h-full overflow-x-auto overflow-y-hidden px-1 py-2">
+                            <KanbanBoard
+                                stages={stages}
+                                dealsByStage={dealsByStage}
+                                onMoveDeal={handleMoveDeal}
+                                onDealClick={handleDealClick}
+                                onAddDeal={handleAddDeal}
                             />
                         </div>
+                    )}
+                </div>
 
-                        <div className="space-y-1.5">
-                            <Label className="text-xs text-zinc-400">Cor</Label>
-                            <div className="flex gap-2 flex-wrap">
-                                {PRESET_COLORS.map((color) => (
-                                    <button
-                                        key={color}
-                                        onClick={() => setNewStageColor(color)}
-                                        className="h-7 w-7 rounded-full border-2 transition-all"
-                                        style={{
-                                            backgroundColor: color,
-                                            borderColor:
-                                                newStageColor === color ? '#fff' : 'transparent',
-                                        }}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowCreate(false)}
-                            className="border-zinc-700 text-zinc-400"
-                        >
-                            Cancelar
-                        </Button>
-                        <Button
-                            onClick={handleCreate}
-                            disabled={!newStageName.trim() || isSaving}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                        >
-                            Criar
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* AlertDialog: confirmar deleção */}
-            <AlertDialog
-                open={!!stageToDelete}
-                onOpenChange={(open) => !open && setStageToDelete(null)}
-            >
-                <AlertDialogContent className="bg-zinc-900 border-zinc-700 text-zinc-100">
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Remover estágio?</AlertDialogTitle>
-                        <AlertDialogDescription className="text-zinc-400">
-                            Esta ação não pode ser desfeita. Estágios com deals vinculados não podem ser removidos.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel className="border-zinc-700 text-zinc-400 bg-transparent hover:bg-zinc-800">
-                            Cancelar
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={() => {
-                                if (stageToDelete) {
-                                    deleteStage(stageToDelete)
-                                    setStageToDelete(null)
-                                }
+                {/* Painel lateral de detalhes */}
+                {selectedDeal && (
+                    <div className="w-80 shrink-0 border-l border-zinc-800 overflow-hidden">
+                        <DealDetailPanel
+                            deal={selectedDeal}
+                            onClose={() => setSelectedDeal(null)}
+                            onUpdate={(id, dto) => {
+                                updateDeal(id, dto)
+                                setSelectedDeal((prev) =>
+                                    prev?.id === id ? { ...prev, ...dto } : prev
+                                )
                             }}
-                            disabled={isDeleting}
-                            className="bg-red-600 hover:bg-red-700 text-white"
-                        >
-                            Remover
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+                            onMarkWon={(id) => {
+                                markWon(id)
+                                setSelectedDeal((prev) =>
+                                    prev?.id === id
+                                        ? { ...prev, status: 'won', wonAt: new Date().toISOString() }
+                                        : prev
+                                )
+                            }}
+                            onMarkLost={(id) => {
+                                markLost(id)
+                                setSelectedDeal((prev) =>
+                                    prev?.id === id
+                                        ? { ...prev, status: 'lost', lostAt: new Date().toISOString() }
+                                        : prev
+                                )
+                            }}
+                            onDelete={(id) => {
+                                deleteDeal(id)
+                                setSelectedDeal(null)
+                            }}
+                        />
+                    </div>
+                )}
+            </div>
+
+            {/* Dialog de criação */}
+            <CreateDealDialog
+                open={createDialogOpen}
+                stages={stages}
+                defaultStageId={defaultStageId}
+                onOpenChange={setCreateDialogOpen}
+                onCreate={createDeal}
+                isCreating={isCreating}
+            />
         </Page>
     )
 }
