@@ -1037,6 +1037,33 @@ export async function POST(request: NextRequest) {
           }
 
           // =================================================================
+          // CRM Funil Automático: detecta resposta de lead com deal ativo
+          // =================================================================
+          if (normalizedFrom) {
+            try {
+              const { handleLeadReply } = await import('@/lib/funnel-executor')
+              // Busca deals abertos cujo contato tem este telefone
+              const { data: dealsWithContact } = await supabase
+                .from('deals')
+                .select('id, qstash_message_id, next_action_at, contacts!inner(phone)')
+                .eq('status', 'open')
+                .eq('contacts.phone', normalizedFrom)
+                .limit(1)
+
+              const activeDeal = Array.isArray(dealsWithContact) ? dealsWithContact[0] : null
+              if (activeDeal?.id) {
+                const requestOrigin = request.nextUrl.origin
+                // Executa ação configurada no estágio (best-effort — não bloqueia)
+                handleLeadReply(activeDeal.id, requestOrigin).catch((e) =>
+                  console.warn('[Webhook] Falha ao processar resposta do lead no funil (best-effort):', e)
+                )
+              }
+            } catch (funnelErr) {
+              console.warn('[Webhook] Erro ao detectar deal ativo para funil (best-effort):', funnelErr)
+            }
+          }
+
+          // =================================================================
           // WhatsApp Flows (MVP sem endpoint): captura submissão final
           // interactive.type = 'nfm_reply' com response_json
           // =================================================================

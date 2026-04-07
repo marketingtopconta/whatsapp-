@@ -15,6 +15,7 @@ import {
     MessageCircle,
     Sparkles,
     Workflow,
+    Kanban,
 } from 'lucide-react'
 import React from 'react'
 import { HealthStatus } from '@/lib/health-check'
@@ -339,6 +340,7 @@ export function DashboardShell({
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
         { path: '/campaigns', label: 'Campanhas', icon: MessageSquare },
         { path: '/inbox', label: 'Inbox', icon: MessageCircle }, // Badge dinâmico renderizado no DashboardSidebar
+        { path: '/crm', label: 'Funil CRM', icon: Kanban },
         { path: '/workflows', label: 'Workflow', icon: Workflow, badge: 'beta', disabled: true, hidden: !isDevMode },
         { path: '/conversations', label: 'Conversas', icon: MessageCircle, hidden: true },
         { path: '/templates', label: 'Templates', icon: FileText },
@@ -351,6 +353,7 @@ export function DashboardShell({
         if (path === '/') return 'Dashboard'
         if (path === '/campaigns') return 'Campanhas'
         if (path.startsWith('/campaigns/new')) return 'Nova Campanha'
+        if (path === '/crm') return 'Funil CRM'
         if (path.startsWith('/campaigns/')) return 'Detalhes da Campanha'
         if (path === '/workflows') return 'Workflows'
         if (path === '/inbox') return 'Inbox'
