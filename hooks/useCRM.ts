@@ -43,23 +43,23 @@ export const CRM_KEYS = {
 // Hook principal
 // ---------------------------------------------------------------------------
 
-export function useCRM() {
+export function useCRM(funnelId?: string) {
     const queryClient = useQueryClient()
     const channelRef = useRef<ReturnType<typeof createRealtimeChannel> | null>(null)
 
     // -----------------------------------------------------------------------
-    // Queries
+    // Queries (filtradas por funil quando funnelId é fornecido)
     // -----------------------------------------------------------------------
 
     const { data: stages = [], isLoading: stagesLoading } = useQuery<PipelineStage[]>({
-        queryKey: CRM_KEYS.stages,
-        queryFn: () => stageService.getAll(),
+        queryKey: [...CRM_KEYS.stages, funnelId ?? 'all'],
+        queryFn: () => stageService.getAll(funnelId),
         staleTime: 60_000,
     })
 
     const { data: dealsResult, isLoading: dealsLoading } = useQuery({
-        queryKey: CRM_KEYS.allDeals,
-        queryFn: () => dealService.list({ limit: 500 }),
+        queryKey: [...CRM_KEYS.allDeals, funnelId ?? 'all'],
+        queryFn: () => dealService.list({ limit: 500, funnelId }),
         staleTime: 15_000,
     })
 

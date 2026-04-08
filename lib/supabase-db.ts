@@ -38,6 +38,9 @@ import {
     UpdateDealDTO,
     CreateDealActivityDTO,
     PipelineMetrics,
+    Funnel,
+    CreateFunnelDTO,
+    UpdateFunnelDTO,
 } from '../types'
 import { isSuppressionActive } from '@/lib/phone-suppressions'
 import { canonicalTemplateCategory } from '@/lib/template-category'
@@ -2657,19 +2660,26 @@ function mapStage(row: any): PipelineStage {
         order: row.order,
         color: row.color,
         funnelConfig: row.funnel_config ?? {},
+        funnelId: row.funnel_id ?? null,
+        isEntryStage: row.is_entry_stage ?? false,
+        isWonStage: row.is_won_stage ?? false,
+        isLostStage: row.is_lost_stage ?? false,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     }
 }
 
 export const pipelineStageDb = {
-    // Lista todos os estágios ordenados
-    getAll: async (): Promise<PipelineStage[]> => {
-        const { data, error } = await supabase
+    // Lista estágios ordenados, opcionalmente filtrados por funil
+    getAll: async (funnelId?: string): Promise<PipelineStage[]> => {
+        let query = supabase
             .from('pipeline_stages')
             .select('*')
             .order('order', { ascending: true })
 
+        if (funnelId) query = query.eq('funnel_id', funnelId)
+
+        const { data, error } = await query
         if (error) throw error
         return (data ?? []).map(mapStage)
     },
@@ -2757,6 +2767,7 @@ function mapDeal(row: any): Deal {
         id: row.id,
         contactId: row.contact_id ?? null,
         stageId: row.stage_id,
+        funnelId: row.funnel_id ?? null,
         title: row.title,
         value: Number(row.value ?? 0),
         status: (row.status ?? 'open') as DealStatus,
@@ -2764,6 +2775,9 @@ function mapDeal(row: any): Deal {
         metadata: row.metadata ?? {},
         nextActionAt: row.next_action_at ?? null,
         qstashMessageId: row.qstash_message_id ?? null,
+        assignedTo: row.assigned_to ?? null,
+        enteredStageAt: row.entered_stage_at ?? null,
+        source: (row.source ?? 'manual') as 'manual' | 'whatsapp_inbound',
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         wonAt: row.won_at ?? null,
@@ -2780,6 +2794,7 @@ export const dealDb = {
     // Lista deals com filtros opcionais
     list: async (opts: {
         stageId?: string
+        funnelId?: string
         status?: DealStatus | string
         contactId?: string
         limit?: number
@@ -2798,6 +2813,7 @@ export const dealDb = {
             .range(offset, offset + limit - 1)
 
         if (opts.stageId)   query = query.eq('stage_id', opts.stageId)
+        if (opts.funnelId)  query = query.eq('funnel_id', opts.funnelId)
         if (opts.status)    query = query.eq('status', opts.status)
         if (opts.contactId) query = query.eq('contact_id', opts.contactId)
 
@@ -2957,5 +2973,159 @@ export const dealActivityDb = {
             .eq('id', id)
 
         if (error) throw error
+    },
+}
+
+// =============================================================================
+// CRM — FUNNELS (Evolution v2 Fase 1)
+// =============================================================================
+
+function mapFunnel(row: any): Funnel {
+    return {
+        id: row.id,
+        name: row.name,
+        description: row.description ?? null,
+        isDefault: row.is_default ?? false,
+        isActive: row.is_active ?? true,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        stageCount: row.stage_count ?? undefined,
+        openDealsCount: row.open_deals_count ?? undefined,
+    }
+}
+
+export const funnelDb = {
+    // Lista todos os funis com contagem de estágios e deals abertos
+    getAll: async (): Promise<Funnel[]> => {
+        const { data, error } = await supabase
+            .from('funnels')
+            .select(`
+                *,
+                stage_count:pipeline_stages(count),
+                open_deals_count:deals(count)
+            `)
+            .order('created_at', { ascending: true })
+
+        if (error) throw error
+        return (data ?? []).map((row: any) => ({
+            ...mapFunnel(row),
+            stageCount: row.stage_count?.[0]?.count ?? 0,
+            openDealsCount: row.open_deals_count?.[0]?.count ?? 0,
+        }))
+    },
+
+    // Busca um funil por ID
+    getById: async (id: string): Promise<Funnel> => {
+        const { data, error } = await supabase
+            .from('funnels')
+            .select('*')
+            .eq('id', id)
+            .single()
+
+        if (error) throw error
+        return mapFunnel(data)
+    },
+
+    // Busca o funil padrão (que recebe leads automáticos)
+    getDefault: async (): Promise<Funnel | null> => {
+        const { data } = await supabase
+            .from('funnels')
+            .select('*')
+            .eq('is_default', true)
+            .eq('is_active', true)
+            .single()
+
+        return data ? mapFunnel(data) : null
+    },
+
+    // Cria um novo funil
+    create: async (dto: CreateFunnelDTO): Promise<Funnel> => {
+        // Se vai ser padrão, remove o padrão anterior
+        if (dto.isDefault) {
+            await supabase
+                .from('funnels')
+                .update({ is_default: false })
+                .eq('is_default', true)
+        }
+
+        const { data, error } = await supabase
+            .from('funnels')
+            .insert({
+                name: dto.name,
+                description: dto.description ?? null,
+                is_default: dto.isDefault ?? false,
+            })
+            .select()
+            .single()
+
+        if (error) throw error
+        return mapFunnel(data)
+    },
+
+    // Atualiza um funil
+    update: async (id: string, dto: UpdateFunnelDTO): Promise<Funnel> => {
+        if (dto.isDefault) {
+            await supabase
+                .from('funnels')
+                .update({ is_default: false })
+                .eq('is_default', true)
+                .neq('id', id)
+        }
+
+        const { data, error } = await supabase
+            .from('funnels')
+            .update({
+                ...(dto.name !== undefined && { name: dto.name }),
+                ...(dto.description !== undefined && { description: dto.description }),
+                ...(dto.isDefault !== undefined && { is_default: dto.isDefault }),
+                ...(dto.isActive !== undefined && { is_active: dto.isActive }),
+            })
+            .eq('id', id)
+            .select()
+            .single()
+
+        if (error) throw error
+        return mapFunnel(data)
+    },
+
+    // Remove um funil (apenas se não for padrão e não tiver deals abertos)
+    delete: async (id: string): Promise<void> => {
+        const { error } = await supabase
+            .from('funnels')
+            .delete()
+            .eq('id', id)
+
+        if (error) throw error
+    },
+
+    // Duplica um funil com seus estágios
+    duplicate: async (id: string, newName: string): Promise<Funnel> => {
+        const source = await funnelDb.getById(id)
+        const newFunnel = await funnelDb.create({ name: newName, isDefault: false })
+
+        // Copia os estágios
+        const { data: stages } = await supabase
+            .from('pipeline_stages')
+            .select('*')
+            .eq('funnel_id', id)
+            .order('order', { ascending: true })
+
+        if (stages && stages.length > 0) {
+            await supabase.from('pipeline_stages').insert(
+                stages.map((s: any) => ({
+                    name: s.name,
+                    order: s.order,
+                    color: s.color,
+                    funnel_config: s.funnel_config,
+                    funnel_id: newFunnel.id,
+                    is_entry_stage: s.is_entry_stage,
+                    is_won_stage: s.is_won_stage,
+                    is_lost_stage: s.is_lost_stage,
+                }))
+            )
+        }
+
+        void source // suprime warning unused
+        return newFunnel
     },
 }

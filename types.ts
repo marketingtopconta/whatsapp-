@@ -878,6 +878,10 @@ export interface PipelineStage {
   order: number;
   color: string;
   funnelConfig: FunnelStageConfig;
+  funnelId: string | null;
+  isEntryStage: boolean;
+  isWonStage: boolean;
+  isLostStage: boolean;
   dealsCount?: number;
   createdAt: string;
   updatedAt: string;
@@ -888,6 +892,7 @@ export interface Deal {
   id: string;
   contactId: string | null;
   stageId: string;
+  funnelId: string | null;
   title: string;
   value: number;
   status: DealStatus;
@@ -895,6 +900,9 @@ export interface Deal {
   metadata: Record<string, unknown>;
   nextActionAt: string | null;
   qstashMessageId: string | null;
+  assignedTo: string | null;
+  enteredStageAt: string | null;
+  source: 'manual' | 'whatsapp_inbound';
   createdAt: string;
   updatedAt: string;
   wonAt: string | null;
@@ -977,3 +985,54 @@ export interface InboxDealInfo {
   stage_color: string;
   next_action_at: string | null;
 }
+
+// =============================================================================
+// MULTI-FUNNEL — Evolution v2 Fase 1
+// =============================================================================
+
+export interface Funnel {
+  id: string;
+  name: string;
+  description: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  // Campos calculados opcionais
+  stageCount?: number;
+  openDealsCount?: number;
+}
+
+export interface StageTimeLog {
+  id: string;
+  dealId: string;
+  stageId: string;
+  funnelId: string;
+  enteredAt: string;
+  leftAt: string | null;
+  durationSeconds: number | null;
+}
+
+export interface AvgTimePerStage {
+  stage_id: string;
+  stage_name: string;
+  stage_order: number;
+  stage_color: string;
+  avg_seconds: number;
+  sample_count: number;
+}
+
+// DTOs
+export interface CreateFunnelDTO {
+  name: string;
+  description?: string | null;
+  isDefault?: boolean;
+}
+
+export interface UpdateFunnelDTO {
+  name?: string;
+  description?: string | null;
+  isDefault?: boolean;
+  isActive?: boolean;
+}
+

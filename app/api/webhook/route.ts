@@ -394,6 +394,69 @@ function extractMetaFlowIdFromSmartzapToken(flowToken: string | null): string | 
   return m?.[1] || null
 }
 
+/**
+ * Auto-cria um deal no funil padrão quando uma nova mensagem chega
+ * de um contato que ainda não tem deal aberto.
+ * Best-effort — erros não devem bloquear o webhook.
+ */
+async function autoCreateLead(supabase: any, phone: string): Promise<void> {
+  // 1. Busca o funil padrão ativo
+  const { data: defaultFunnel } = await supabase
+    .from('funnels')
+    .select('id')
+    .eq('is_default', true)
+    .eq('is_active', true)
+    .single()
+
+  if (!defaultFunnel?.id) return // sem funil padrão configurado
+
+  // 2. Busca o estágio de entrada do funil padrão
+  const { data: entryStage } = await supabase
+    .from('pipeline_stages')
+    .select('id')
+    .eq('funnel_id', defaultFunnel.id)
+    .eq('is_entry_stage', true)
+    .single()
+
+  // Fallback: usa o primeiro estágio do funil
+  let stageId = entryStage?.id
+  if (!stageId) {
+    const { data: firstStage } = await supabase
+      .from('pipeline_stages')
+      .select('id')
+      .eq('funnel_id', defaultFunnel.id)
+      .order('order', { ascending: true })
+      .limit(1)
+      .single()
+    stageId = firstStage?.id
+  }
+
+  if (!stageId) return // funil sem estágios
+
+  // 3. Busca (ou cria) o contato pelo telefone
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('id, name')
+    .eq('phone', phone)
+    .single()
+
+  const contactId = contact?.id ?? null
+  const leadTitle = contact?.name ? `Lead: ${contact.name}` : `Lead: ${phone}`
+
+  // 4. Cria o deal automaticamente
+  await supabase.from('deals').insert({
+    contact_id: contactId,
+    stage_id: stageId,
+    funnel_id: defaultFunnel.id,
+    title: leadTitle,
+    status: 'open',
+    source: 'whatsapp_inbound',
+    entered_stage_at: new Date().toISOString(),
+  })
+
+  console.log(`[Webhook] Lead criado automaticamente para ${phone} no funil ${defaultFunnel.id}`)
+}
+
 function humanizeOptionId(value: string): string {
   const v = String(value || '').trim()
   if (!v) return v
@@ -1056,6 +1119,13 @@ export async function POST(request: NextRequest) {
                 // Executa ação configurada no estágio (best-effort — não bloqueia)
                 handleLeadReply(activeDeal.id, requestOrigin).catch((e) =>
                   console.warn('[Webhook] Falha ao processar resposta do lead no funil (best-effort):', e)
+                )
+              } else {
+                // =============================================================
+                // AUTO-CRIAÇÃO DE LEAD: nenhum deal aberto → cria no funil padrão
+                // =============================================================
+                autoCreateLead(supabase, normalizedFrom).catch((e) =>
+                  console.warn('[Webhook] Auto-criação de lead falhou (best-effort):', e)
                 )
               }
             } catch (funnelErr) {

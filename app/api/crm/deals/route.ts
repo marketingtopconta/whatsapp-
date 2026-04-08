@@ -22,13 +22,14 @@ export async function GET(request: NextRequest) {
 
     const url = new URL(request.url)
     const stageId = url.searchParams.get('stageId') || undefined
+    const funnelId = url.searchParams.get('funnelId') || undefined
     const status = url.searchParams.get('status') as DealStatus | undefined
     const contactId = url.searchParams.get('contactId') || undefined
     const limit = Math.min(Number(url.searchParams.get('limit') || '100'), 500)
     const offset = Math.max(Number(url.searchParams.get('offset') || '0'), 0)
 
     try {
-        const result = await dealDb.list({ stageId, status, contactId, limit, offset })
+        const result = await dealDb.list({ stageId, funnelId, status, contactId, limit, offset })
         return NextResponse.json(result)
     } catch (error) {
         console.error('[CRM] Erro ao listar deals:', error)

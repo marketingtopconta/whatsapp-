@@ -1,14 +1,17 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { RefreshCw, Settings2, Plus, BarChart3 } from 'lucide-react'
+import { RefreshCw, Settings2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Page, PageHeader, PageTitle, PageDescription } from '@/components/ui/page'
 import { KanbanBoard } from '@/components/features/crm/KanbanBoard'
 import { DealDetailPanel } from '@/components/features/crm/DealDetailPanel'
 import { CreateDealDialog } from '@/components/features/crm/CreateDealDialog'
+import { FunnelSelector } from '@/components/features/crm/FunnelSelector'
 import { useCRM } from '@/hooks/useCRM'
+import { useFunnels } from '@/hooks/useFunnels'
 import type { Deal } from '@/types'
 
 // ---------------------------------------------------------------------------
@@ -58,6 +61,15 @@ function MetricsBar({ allDeals }: { allDeals: Deal[] }) {
 // ---------------------------------------------------------------------------
 
 export default function CRMKanbanPage() {
+    const router = useRouter()
+
+    // Funis disponíveis
+    const { funnels, defaultFunnel, isLoading: funnelsLoading } = useFunnels()
+
+    // Funil selecionado (começa com o padrão)
+    const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(null)
+    const activeFunnelId = selectedFunnelId ?? defaultFunnel?.id ?? null
+
     const {
         stages,
         allDeals,
@@ -71,7 +83,7 @@ export default function CRMKanbanPage() {
         deleteDeal,
         isCreating,
         refetch,
-    } = useCRM()
+    } = useCRM(activeFunnelId ?? undefined)
 
     // Painel lateral de detalhes
     const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null)
@@ -80,9 +92,7 @@ export default function CRMKanbanPage() {
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
     const [defaultStageId, setDefaultStageId] = useState<string | undefined>(undefined)
 
-    const handleDealClick = useCallback((deal: Deal) => {
-        setSelectedDeal(deal)
-    }, [])
+    const handleDealClick = useCallback((deal: Deal) => setSelectedDeal(deal), [])
 
     const handleAddDeal = useCallback((stageId: string) => {
         setDefaultStageId(stageId)
@@ -92,7 +102,6 @@ export default function CRMKanbanPage() {
     const handleMoveDeal = useCallback(
         (dealId: string, stageId: string) => {
             moveDeal(dealId, stageId)
-            // Atualiza o deal selecionado no painel se for o mesmo
             setSelectedDeal((prev) =>
                 prev?.id === dealId ? { ...prev, stageId } : prev
             )
@@ -104,8 +113,17 @@ export default function CRMKanbanPage() {
         <Page className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden pb-0">
             {/* Cabeçalho */}
             <PageHeader className="shrink-0 pb-3">
-                <div>
-                    <PageTitle>Funil CRM</PageTitle>
+                <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-3">
+                        <PageTitle>Funil CRM</PageTitle>
+                        <FunnelSelector
+                            funnels={funnels}
+                            selectedFunnelId={activeFunnelId}
+                            onSelect={setSelectedFunnelId}
+                            onManage={() => router.push('/crm/funnels')}
+                            isLoading={funnelsLoading}
+                        />
+                    </div>
                     <PageDescription className="sr-only">
                         Board drag-and-drop com atualização em tempo real
                     </PageDescription>
@@ -129,7 +147,7 @@ export default function CRMKanbanPage() {
                     >
                         <Link href="/crm/config">
                             <Settings2 className="h-4 w-4 mr-1.5" />
-                            Configurar Funil
+                            Configurar
                         </Link>
                     </Button>
                     <Button
@@ -149,12 +167,7 @@ export default function CRMKanbanPage() {
 
             {/* Board + painel lateral */}
             <div className="flex flex-1 gap-0 overflow-hidden min-h-0">
-                {/* Kanban Board */}
-                <div
-                    className={`flex-1 overflow-hidden transition-all duration-300 ${
-                        selectedDeal ? 'pr-0' : ''
-                    }`}
-                >
+                <div className={`flex-1 overflow-hidden transition-all duration-300 ${selectedDeal ? 'pr-0' : ''}`}>
                     {isLoading ? (
                         <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
                             Carregando funil…
@@ -172,7 +185,6 @@ export default function CRMKanbanPage() {
                     )}
                 </div>
 
-                {/* Painel lateral de detalhes */}
                 {selectedDeal && (
                     <div className="w-80 shrink-0 border-l border-zinc-800 overflow-hidden">
                         <DealDetailPanel
@@ -209,7 +221,6 @@ export default function CRMKanbanPage() {
                 )}
             </div>
 
-            {/* Dialog de criação */}
             <CreateDealDialog
                 open={createDialogOpen}
                 stages={stages}

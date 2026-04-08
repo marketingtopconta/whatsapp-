@@ -22,7 +22,9 @@ const CreateStageSchema = z.object({
 export async function GET(request: NextRequest) {
 
     try {
-        const stages = await pipelineStageDb.getAll()
+        const url = new URL(request.url)
+        const funnelId = url.searchParams.get('funnelId') || undefined
+        const stages = await pipelineStageDb.getAll(funnelId)
         return NextResponse.json(stages)
     } catch (error) {
         console.error('[CRM] Erro ao listar estágios:', error)

@@ -38,9 +38,11 @@ async function apiFetch<T>(
 // =============================================================================
 
 export const stageService = {
-    /** Lista todos os estágios do pipeline */
-    getAll: (): Promise<PipelineStage[]> =>
-        apiFetch('/api/crm/stages'),
+    /** Lista estágios, opcionalmente filtrados por funil */
+    getAll: (funnelId?: string): Promise<PipelineStage[]> => {
+        const params = funnelId ? `?funnelId=${encodeURIComponent(funnelId)}` : ''
+        return apiFetch(`/api/crm/stages${params}`)
+    },
 
     /** Retorna um estágio pelo ID */
     getById: (id: string): Promise<PipelineStage> =>
@@ -71,6 +73,7 @@ export const stageService = {
 
 export interface DealListParams {
     stageId?: string
+    funnelId?: string
     status?: DealStatus
     contactId?: string
     limit?: number
@@ -87,6 +90,7 @@ export const dealService = {
     list: (params: DealListParams = {}): Promise<DealListResult> => {
         const qs = new URLSearchParams()
         if (params.stageId)   qs.set('stageId', params.stageId)
+        if (params.funnelId)  qs.set('funnelId', params.funnelId)
         if (params.status)    qs.set('status', params.status)
         if (params.contactId) qs.set('contactId', params.contactId)
         if (params.limit)     qs.set('limit', String(params.limit))
