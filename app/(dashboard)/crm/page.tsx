@@ -145,9 +145,9 @@ export default function CRMKanbanPage() {
                         asChild
                         className="border-zinc-700 text-zinc-400 hover:text-zinc-100"
                     >
-                        <Link href="/crm/config">
+                        <Link href="/crm/triggers">
                             <Settings2 className="h-4 w-4 mr-1.5" />
-                            Configurar
+                            Automações
                         </Link>
                     </Button>
                     <Button

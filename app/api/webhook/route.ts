@@ -1120,6 +1120,14 @@ export async function POST(request: NextRequest) {
                 handleLeadReply(activeDeal.id, requestOrigin).catch((e) =>
                   console.warn('[Webhook] Falha ao processar resposta do lead no funil (best-effort):', e)
                 )
+
+                // Avalia triggers de keyword (best-effort)
+                const msgText = extractInboundText(message)
+                if (msgText) {
+                  const { evaluateTriggers } = await import('@/lib/trigger-engine')
+                  evaluateTriggers(activeDeal.id, { type: 'message_received', text: msgText }, request.nextUrl.origin)
+                    .catch((e) => console.warn('[Webhook] Falha ao avaliar triggers de keyword:', e))
+                }
               } else {
                 // =============================================================
                 // AUTO-CRIAÇÃO DE LEAD: nenhum deal aberto → cria no funil padrão

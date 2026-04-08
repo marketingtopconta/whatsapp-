@@ -987,8 +987,117 @@ export interface InboxDealInfo {
 }
 
 // =============================================================================
-// MULTI-FUNNEL — Evolution v2 Fase 1
+// TRIGGER ENGINE — Evolution v2 Fase 2
 // =============================================================================
+
+export type TriggerType =
+    | 'time_no_reply'
+    | 'keyword'
+    | 'stage_enter'
+    | 'stage_exit'
+    | 'deal_won'
+    | 'deal_lost'
+    | 'tag_added'
+
+export type TriggerActionType =
+    | 'send_template'
+    | 'send_text'
+    | 'move_stage'
+    | 'add_tag'
+    | 'assign_to'
+    | 'wait'
+    | 'mark_won'
+    | 'mark_lost'
+    | 'webhook'
+
+export type TriggerExecutionStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped'
+
+export interface TriggerConfig {
+    // time_no_reply
+    minutes?: number
+    // keyword
+    keywords?: string[]
+    match?: 'any' | 'all'
+    // tag_added
+    tag?: string
+}
+
+export interface TriggerActionConfig {
+    // send_template
+    template_name?: string
+    language?: string
+    // send_text
+    text?: string
+    // move_stage
+    stage_id?: string
+    // add_tag / assign_to
+    name?: string
+    // wait
+    // (minutes já está em TriggerConfig, reutilizamos)
+    // webhook
+    url?: string
+    method?: 'POST' | 'GET'
+    [key: string]: unknown
+}
+
+export interface TriggerAction {
+    id: string
+    triggerId: string
+    order: number
+    actionType: TriggerActionType
+    actionConfig: TriggerActionConfig
+    createdAt: string
+}
+
+export interface Trigger {
+    id: string
+    funnelId: string | null
+    stageId: string | null
+    name: string
+    isActive: boolean
+    triggerType: TriggerType
+    triggerConfig: TriggerConfig
+    createdAt: string
+    updatedAt: string
+    // Joined
+    actions?: TriggerAction[]
+}
+
+export interface TriggerExecutionLog {
+    id: string
+    triggerId: string | null
+    dealId: string | null
+    triggerName: string | null
+    status: TriggerExecutionStatus
+    startedAt: string
+    finishedAt: string | null
+    actionsExecuted: number
+    errorMessage: string | null
+    metadata: Record<string, unknown>
+}
+
+// DTOs
+export interface CreateTriggerDTO {
+    funnelId?: string | null
+    stageId?: string | null
+    name: string
+    triggerType: TriggerType
+    triggerConfig?: TriggerConfig
+    actions?: Array<{ order: number; actionType: TriggerActionType; actionConfig: TriggerActionConfig }>
+}
+
+export interface UpdateTriggerDTO {
+    name?: string
+    isActive?: boolean
+    triggerType?: TriggerType
+    triggerConfig?: TriggerConfig
+}
+
+export interface CreateTriggerActionDTO {
+    order: number
+    actionType: TriggerActionType
+    actionConfig: TriggerActionConfig
+}
 
 export interface Funnel {
   id: string;

@@ -54,6 +54,12 @@ export async function POST(request: NextRequest) {
         }
 
         const deal = await dealDb.create(parsed.data)
+
+        // Dispara triggers de stage_enter no estágio inicial — best-effort
+        const { evaluateTriggers } = await import('@/lib/trigger-engine')
+        evaluateTriggers(deal.id, { type: 'stage_enter', stageId: deal.stageId, funnelId: deal.funnelId ?? undefined }, request.nextUrl.origin)
+            .catch((e) => console.warn('[CreateDeal] Falha ao disparar stage_enter:', e))
+
         return NextResponse.json(deal, { status: 201 })
     } catch (error) {
         console.error('[CRM] Erro ao criar deal:', error)

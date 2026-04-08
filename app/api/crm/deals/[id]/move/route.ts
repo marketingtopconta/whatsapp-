@@ -39,6 +39,15 @@ export async function POST(
         }
 
         const deal = await dealDb.move(id, parsed.data.stageId, existing.stageId)
+
+        // Dispara triggers de stage_exit (estágio anterior) e stage_enter (novo) — best-effort
+        const { evaluateTriggers } = await import('@/lib/trigger-engine')
+        const origin = request.nextUrl.origin
+        evaluateTriggers(id, { type: 'stage_exit', stageId: existing.stageId, funnelId: existing.funnelId ?? undefined }, origin)
+            .catch((e) => console.warn('[MoveDeal] Falha ao disparar stage_exit:', e))
+        evaluateTriggers(id, { type: 'stage_enter', stageId: parsed.data.stageId, funnelId: existing.funnelId ?? undefined }, origin)
+            .catch((e) => console.warn('[MoveDeal] Falha ao disparar stage_enter:', e))
+
         return NextResponse.json(deal)
     } catch (error) {
         console.error('[CRM] Erro ao mover deal:', error)
