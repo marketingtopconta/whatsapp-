@@ -5,14 +5,12 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   Plus, ArrowLeft, Zap, ToggleLeft, ToggleRight, Trash2, Pencil,
-  CheckCircle2, XCircle, Clock, LayoutList, Columns,
+  CheckCircle2, XCircle, Clock, LayoutList, Columns, GitBranch,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Page, PageHeader, PageTitle } from '@/components/ui/page'
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -26,7 +24,24 @@ import { FunnelAutomationBoard } from '@/components/features/crm/FunnelAutomatio
 import { useTriggers, useTriggerLog } from '@/hooks/useTriggers'
 import { useFunnels } from '@/hooks/useFunnels'
 import { useCRM } from '@/hooks/useCRM'
+import { useQuery } from '@tanstack/react-query'
 import type { Trigger, TriggerType, TriggerConfig, TriggerActionType, TriggerActionConfig } from '@/types'
+
+// =============================================================================
+// Busca triggers de TODOS os funis para mostrar contagens
+// =============================================================================
+
+function useAllTriggers() {
+  return useQuery<Trigger[]>({
+    queryKey: ['crm', 'triggers', 'all'],
+    queryFn: async () => {
+      const res = await fetch('/api/crm/triggers')
+      if (!res.ok) return []
+      return res.json()
+    },
+    staleTime: 30_000,
+  })
+}
 
 // =============================================================================
 // Tipos internos
@@ -40,6 +55,95 @@ const EMPTY_BUILDER = {
   triggerConfig: {} as TriggerConfig,
   stageId: undefined as string | undefined,
   actions: [] as { order: number; actionType: TriggerActionType; actionConfig: TriggerActionConfig }[],
+}
+
+// =============================================================================
+// Painel de funis com contagem de triggers — exibido quando board está vazio
+// =============================================================================
+
+interface FunnelTriggerSummaryProps {
+  funnels: { id: string; name: string; isDefault?: boolean }[]
+  allTriggers: Trigger[]
+  activeFunnelId?: string
+  onSelect: (id: string) => void
+}
+
+function FunnelTriggerSummary({ funnels, allTriggers, activeFunnelId, onSelect }: FunnelTriggerSummaryProps) {
+  // Conta triggers por funil
+  const countByFunnel = allTriggers.reduce<Record<string, number>>((acc, t) => {
+    const key = t.funnelId ?? '__global__'
+    acc[key] = (acc[key] ?? 0) + 1
+    return acc
+  }, {})
+
+  const funnelsWithTriggers = funnels.filter((f) => (countByFunnel[f.id] ?? 0) > 0)
+  const funnelsWithout = funnels.filter((f) => (countByFunnel[f.id] ?? 0) === 0)
+
+  return (
+    <div className="flex flex-col items-center gap-4 py-10 px-4">
+      <div className="text-center">
+        <Zap className="h-10 w-10 mx-auto mb-2 text-zinc-600 opacity-50" />
+        <p className="text-sm font-medium text-zinc-300">
+          Este funil não tem automações configuradas
+        </p>
+        <p className="text-xs text-zinc-500 mt-1">
+          Selecione outro funil abaixo para ver as automações, ou crie uma nova.
+        </p>
+      </div>
+
+      {funnelsWithTriggers.length > 0 && (
+        <div className="w-full max-w-md">
+          <p className="text-[11px] font-medium text-zinc-500 uppercase tracking-wide mb-2">
+            Funis com automações configuradas
+          </p>
+          <div className="space-y-2">
+            {funnelsWithTriggers.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => onSelect(f.id)}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
+                  f.id === activeFunnelId
+                    ? 'border-emerald-500 bg-emerald-500/10'
+                    : 'border-zinc-700 bg-zinc-800/60 hover:border-zinc-600 hover:bg-zinc-800'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <GitBranch className="h-3.5 w-3.5 text-zinc-400" />
+                  <span className="text-sm text-zinc-200">{f.name}</span>
+                  {f.isDefault && (
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded">
+                      padrão
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-semibold text-emerald-400">
+                  {countByFunnel[f.id] ?? 0} trigger{(countByFunnel[f.id] ?? 0) !== 1 ? 's' : ''}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {funnelsWithout.length > 0 && (
+        <div className="w-full max-w-md">
+          <p className="text-[11px] font-medium text-zinc-600 uppercase tracking-wide mb-1">
+            Funis sem automações
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {funnelsWithout.map((f) => (
+              <span
+                key={f.id}
+                className="text-[11px] text-zinc-600 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded-lg"
+              >
+                {f.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // =============================================================================
@@ -68,8 +172,9 @@ export default function TriggersPage() {
   } = useTriggers(activeFunnelId)
   const { stages } = useCRM(activeFunnelId)
   const { data: log = [] } = useTriggerLog()
+  const { data: allTriggers = [] } = useAllTriggers()
 
-  // Visão: board (por estágio) ou list (tabela)
+  // Visão: board (por estágio) ou list
   const [viewMode, setViewMode] = useState<ViewMode>('board')
 
   // Dialogs
@@ -141,9 +246,11 @@ export default function TriggersPage() {
     })
   }
 
-  const recentLog = log.slice(0, 10)
   const stageName = (stageId?: string | null) =>
     stages.find((s) => s.id === stageId)?.name ?? '—'
+
+  // Board está vazio = nenhum trigger neste funil
+  const boardIsEmpty = !isLoading && triggers.length === 0
 
   // ==========================================================================
   // Render
@@ -168,8 +275,15 @@ export default function TriggersPage() {
               />
             </div>
             <p className="text-xs text-zinc-500 mt-0.5">
-              {triggers.length} trigger{triggers.length !== 1 ? 's' : ''} configurado{triggers.length !== 1 ? 's' : ''}
-              {triggers.length > 0 && ` · ${triggers.filter((t) => t.isActive).length} ativos`}
+              {isLoading ? (
+                <span className="inline-block w-32 h-3 bg-zinc-800 animate-pulse rounded" />
+              ) : (
+                <>
+                  {triggers.length > 0
+                    ? `${triggers.length} trigger${triggers.length !== 1 ? 's' : ''} · ${triggers.filter((t) => t.isActive).length} ativo${triggers.filter((t) => t.isActive).length !== 1 ? 's' : ''}`
+                    : 'Nenhum trigger neste funil'}
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -212,22 +326,36 @@ export default function TriggersPage() {
         </div>
       </PageHeader>
 
-      {/* Conteúdo — muda conforme viewMode */}
+      {/* Conteúdo */}
       <div className="flex-1 overflow-hidden min-h-0">
 
         {/* ---- VISÃO BOARD (por estágio) ---- */}
         {viewMode === 'board' && (
-          <div className="h-full overflow-x-auto overflow-y-hidden px-1 py-2">
-            <FunnelAutomationBoard
-              stages={stages}
-              triggers={triggers}
-              onAdd={handleOpenCreate}
-              onEdit={openEdit}
-              onDelete={setDeleteTarget}
-              onToggle={toggleActive}
-              isLoading={isLoading}
-            />
-          </div>
+          <>
+            {boardIsEmpty ? (
+              /* Estado vazio: mostra funis com triggers para o usuário trocar */
+              <div className="h-full overflow-y-auto">
+                <FunnelTriggerSummary
+                  funnels={funnels}
+                  allTriggers={allTriggers}
+                  activeFunnelId={activeFunnelId}
+                  onSelect={setSelectedFunnelId}
+                />
+              </div>
+            ) : (
+              <div className="h-full overflow-x-auto overflow-y-hidden px-1 py-2">
+                <FunnelAutomationBoard
+                  stages={stages}
+                  triggers={triggers}
+                  onAdd={handleOpenCreate}
+                  onEdit={openEdit}
+                  onDelete={setDeleteTarget}
+                  onToggle={toggleActive}
+                  isLoading={isLoading}
+                />
+              </div>
+            )}
+          </>
         )}
 
         {/* ---- VISÃO LISTA ---- */}
@@ -238,22 +366,20 @@ export default function TriggersPage() {
               <div className="lg:col-span-2 space-y-3">
                 {isLoading ? (
                   <div className="space-y-3">
-                    {[1, 2].map((i) => (
+                    {[1, 2, 3].map((i) => (
                       <div key={i} className="h-20 rounded-xl bg-zinc-800/50 animate-pulse" />
                     ))}
                   </div>
                 ) : triggers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
-                    <Zap className="h-8 w-8 mb-2 opacity-40" />
-                    <p className="text-sm">Nenhum trigger configurado.</p>
-                    <Button
-                      variant="link"
-                      className="text-emerald-400 mt-1 text-xs"
-                      onClick={() => handleOpenCreate()}
-                    >
-                      Criar primeiro trigger
-                    </Button>
-                  </div>
+                  <FunnelTriggerSummary
+                    funnels={funnels}
+                    allTriggers={allTriggers}
+                    activeFunnelId={activeFunnelId}
+                    onSelect={(id) => {
+                      setSelectedFunnelId(id)
+                      setViewMode('board')
+                    }}
+                  />
                 ) : (
                   triggers.map((trigger) => (
                     <div
@@ -272,10 +398,8 @@ export default function TriggersPage() {
                               {trigger.name}
                             </span>
                             {trigger.stageId && (
-                              <span
-                                className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded"
-                              >
-                                {stageName(trigger.stageId)}
+                              <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">
+                                📍 {stageName(trigger.stageId)}
                               </span>
                             )}
                           </div>
@@ -330,10 +454,10 @@ export default function TriggersPage() {
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
                   Execuções recentes
                 </p>
-                {recentLog.length === 0 ? (
+                {log.length === 0 ? (
                   <p className="text-xs text-zinc-600">Nenhuma execução ainda.</p>
                 ) : (
-                  recentLog.map((entry) => (
+                  log.slice(0, 10).map((entry) => (
                     <div
                       key={entry.id}
                       className="flex items-start gap-2 p-2 rounded-lg bg-zinc-900 border border-zinc-800"
@@ -384,10 +508,9 @@ export default function TriggersPage() {
               )}
             </DialogTitle>
           </DialogHeader>
-          {/* Seletor de estágio dentro do dialog */}
           {stages.length > 0 && (
             <div className="mt-1 mb-3">
-              <label className="text-xs text-zinc-400 mb-1 block">Estágio (opcional)</label>
+              <label className="text-xs text-zinc-400 mb-1 block">Estágio</label>
               <Select
                 value={builderValue.stageId ?? '__global__'}
                 onValueChange={(v) =>
@@ -421,9 +544,7 @@ export default function TriggersPage() {
           )}
           <TriggerBuilder value={builderValue} onChange={setBuilderValue} stages={stages} />
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
             <Button
               onClick={handleCreate}
               disabled={!builderValue.name.trim() || isCreating}
@@ -477,9 +598,7 @@ export default function TriggersPage() {
           )}
           <TriggerBuilder value={builderValue} onChange={setBuilderValue} stages={stages} />
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setEditTrigger(null)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setEditTrigger(null)}>Cancelar</Button>
             <Button
               onClick={handleSaveEdit}
               disabled={!builderValue.name.trim() || isSaving}
@@ -492,16 +611,12 @@ export default function TriggersPage() {
       </Dialog>
 
       {/* AlertDialog — Remover trigger */}
-      <AlertDialog
-        open={!!deleteTarget}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-      >
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remover trigger?</AlertDialogTitle>
             <AlertDialogDescription>
-              O trigger <strong>"{deleteTarget?.name}"</strong> será removido permanentemente
-              junto com suas ações.
+              O trigger <strong>"{deleteTarget?.name}"</strong> será removido permanentemente.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
