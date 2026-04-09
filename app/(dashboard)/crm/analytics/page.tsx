@@ -18,6 +18,7 @@ import { ConversionFunnelChart } from '@/components/features/crm/analytics/Conve
 import { LeadsTimelineChart } from '@/components/features/crm/analytics/LeadsTimelineChart'
 import { AttendantPerformanceTable } from '@/components/features/crm/analytics/AttendantPerformanceTable'
 import { LeadsBySourceChart } from '@/components/features/crm/analytics/LeadsBySourceChart'
+import { AppLinkFunnelChart } from '@/components/features/crm/analytics/AppLinkFunnelChart'
 import type { CRMAnalyticsParams } from '@/types'
 
 const PERIOD_OPTIONS = [
@@ -124,6 +125,9 @@ export default function CRMAnalyticsPage() {
         <ConversionFunnelChart data={conversionRates} isLoading={isLoading} />
         <LeadsBySourceChart data={bySource} isLoading={isLoading} />
       </div>
+
+      {/* Funil do App — rastreamento de link */}
+      <AppLinkFunnelChart startDate={params.startDate} endDate={params.endDate} />
 
       {/* Atendentes */}
       <AttendantPerformanceTable data={attendants} isLoading={isLoading} />

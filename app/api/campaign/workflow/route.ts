@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { CampaignStatus, ContactStatus } from '@/types'
 import { getUserFriendlyMessageForMetaError, normalizeMetaErrorTextForStorage } from '@/lib/whatsapp-errors'
 import { buildMetaTemplatePayload, precheckContactForTemplate, renderTemplatePreviewText } from '@/lib/whatsapp/template-contract'
+import { injectTrackingTokens } from '@/lib/app-link-injector'
 import { syncCampaignTemplateToInbox } from '@/lib/inbox/inbox-service'
 import { emitWorkflowTrace, maskPhone, timePhase } from '@/lib/workflow-trace'
 import { createRateLimiter } from '@/lib/rate-limiter'
@@ -1457,12 +1458,22 @@ const workflowHandler = serve<CampaignWorkflowInput>(
             let whatsappPayload: any
             try {
               const activeTemplate = refreshedTemplateForBatch || templateForBatch
+              // Injeta token de rastreamento nos botões de URL dinâmicos (best-effort)
+              const valuesWithTracking = await injectTrackingTokens({
+                phone: precheck.normalizedPhone,
+                contactId: contact.contactId ?? null,
+                campaignContactId: null,
+                templateName,
+                campaignName: templateName,
+                template: activeTemplate,
+                values: valuesForSend as any,
+              }).catch(() => valuesForSend)
               whatsappPayload = buildMetaTemplatePayload({
                 to: precheck.normalizedPhone,
                 templateName,
                 language: (activeTemplate as any).language || 'pt_BR',
                 parameterFormat: (activeTemplate as any).parameter_format || (activeTemplate as any).parameterFormat || 'positional',
-                values: valuesForSend,
+                values: valuesWithTracking as any,
                 template: activeTemplate as any,
                 campaignId,
               })
