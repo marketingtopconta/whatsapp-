@@ -2,13 +2,13 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Plus, Pencil, Trash2, Copy, Star, ArrowLeft, GitBranch, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, Copy, Star, ArrowLeft, GitBranch, ToggleLeft, ToggleRight, Download, Zap, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Page, PageHeader, PageTitle, PageDescription } from '@/components/ui/page'
 import {
-    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog'
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -16,11 +16,12 @@ import {
     AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useFunnels } from '@/hooks/useFunnels'
+import { FUNNEL_TEMPLATES } from '@/lib/funnel-templates'
 import type { Funnel } from '@/types'
 
 export default function FunnelsPage() {
     const {
-        funnels, isLoading,
+        funnels, isLoading, refetch,
         createFunnel, updateFunnel, deleteFunnel, duplicateFunnel, setDefault,
         isCreating, isUpdating, isDeleting,
     } = useFunnels()
@@ -30,6 +31,13 @@ export default function FunnelsPage() {
     const [editFunnel, setEditFunnel] = useState<Funnel | null>(null)
     const [deleteFunnelTarget, setDeleteFunnelTarget] = useState<Funnel | null>(null)
     const [duplicateFunnelTarget, setDuplicateFunnelTarget] = useState<Funnel | null>(null)
+
+    // Template import
+    const [importOpen, setImportOpen] = useState(false)
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+    const [importName, setImportName] = useState('')
+    const [isImporting, setIsImporting] = useState(false)
+    const [importSuccess, setImportSuccess] = useState<{ funnelId: string; stagesCreated: number; triggersCreated: number; actionsCreated: number } | null>(null)
 
     // Form states
     const [newName, setNewName] = useState('')
@@ -103,6 +111,46 @@ export default function FunnelsPage() {
         }
     }
 
+    const handleSelectTemplate = (id: string) => {
+        setSelectedTemplateId(id)
+        const tpl = FUNNEL_TEMPLATES.find((t) => t.id === id)
+        setImportName(tpl?.name ?? '')
+        setImportSuccess(null)
+    }
+
+    const handleImportTemplate = async () => {
+        if (!selectedTemplateId) return
+        setIsImporting(true)
+        try {
+            const res = await fetch('/api/crm/funnels/import-template', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ templateId: selectedTemplateId, funnelName: importName }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error ?? 'Erro ao importar template')
+            setImportSuccess({
+                funnelId: data.funnelId,
+                stagesCreated: data.stagesCreated,
+                triggersCreated: data.triggersCreated,
+                actionsCreated: data.actionsCreated,
+            })
+            toast.success(`Funil "${importName}" importado com sucesso!`)
+            void refetch()
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setIsImporting(false)
+        }
+    }
+
+    const handleCloseImport = () => {
+        setImportOpen(false)
+        setSelectedTemplateId(null)
+        setImportName('')
+        setImportSuccess(null)
+    }
+
     return (
         <Page>
             <PageHeader>
@@ -119,14 +167,25 @@ export default function FunnelsPage() {
                         </PageDescription>
                     </div>
                 </div>
-                <Button
-                    size="sm"
-                    onClick={() => setCreateOpen(true)}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                >
-                    <Plus className="h-4 w-4 mr-1.5" />
-                    Novo Funil
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setImportOpen(true)}
+                        className="border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500"
+                    >
+                        <Download className="h-4 w-4 mr-1.5" />
+                        Importar Template
+                    </Button>
+                    <Button
+                        size="sm"
+                        onClick={() => setCreateOpen(true)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                        <Plus className="h-4 w-4 mr-1.5" />
+                        Novo Funil
+                    </Button>
+                </div>
             </PageHeader>
 
             {/* Lista de funis */}
@@ -319,6 +378,107 @@ export default function FunnelsPage() {
                         >
                             Duplicar
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog — Importar Template */}
+            <Dialog open={importOpen} onOpenChange={(o) => { if (!o) handleCloseImport() }}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Zap className="h-4 w-4 text-emerald-400" />
+                            Importar Funil Pronto
+                        </DialogTitle>
+                        <DialogDescription>
+                            Escolha um template com estágios e triggers pré-configurados. Pronto para usar em 1 clique.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {!importSuccess ? (
+                        <div className="space-y-4 py-1">
+                            {/* Grade de templates */}
+                            <div className="space-y-2">
+                                {FUNNEL_TEMPLATES.map((tpl) => (
+                                    <button
+                                        key={tpl.id}
+                                        onClick={() => handleSelectTemplate(tpl.id)}
+                                        className={`w-full text-left p-3.5 rounded-xl border transition-all ${
+                                            selectedTemplateId === tpl.id
+                                                ? 'border-emerald-500 bg-emerald-500/10'
+                                                : 'border-zinc-700 bg-zinc-800/60 hover:border-zinc-600'
+                                        }`}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <span className="text-2xl leading-none mt-0.5">{tpl.icon}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="font-medium text-zinc-100 text-sm">{tpl.name}</span>
+                                                    <span className="text-[10px] text-zinc-500 shrink-0">
+                                                        {tpl.stages.length} estágios · {tpl.stages.reduce((acc, s) => acc + s.triggers.length, 0)} triggers
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">{tpl.description}</p>
+                                                {/* Estágios do template */}
+                                                <div className="flex flex-wrap gap-1 mt-2">
+                                                    {tpl.stages.map((s) => (
+                                                        <span
+                                                            key={s.name}
+                                                            className="text-[10px] px-1.5 py-0.5 rounded"
+                                                            style={{ backgroundColor: s.color + '22', color: s.color, border: `1px solid ${s.color}44` }}
+                                                        >
+                                                            {s.name}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Nome do funil a criar */}
+                            {selectedTemplateId && (
+                                <div>
+                                    <label className="text-xs text-zinc-400 mb-1 block">Nome do funil</label>
+                                    <Input
+                                        value={importName}
+                                        onChange={(e) => setImportName(e.target.value)}
+                                        placeholder="Nome para o funil importado"
+                                        className="bg-zinc-800 border-zinc-700"
+                                        autoFocus
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="py-6 flex flex-col items-center gap-3 text-center">
+                            <CheckCircle2 className="h-12 w-12 text-emerald-400" />
+                            <div>
+                                <p className="font-semibold text-zinc-100">Funil importado com sucesso!</p>
+                                <p className="text-sm text-zinc-400 mt-1">
+                                    {importSuccess.stagesCreated} estágios · {importSuccess.triggersCreated} triggers · {importSuccess.actionsCreated} ações
+                                </p>
+                            </div>
+                            <p className="text-xs text-zinc-500">
+                                Vá ao CRM para ver seu funil e começar a receber leads automaticamente.
+                            </p>
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={handleCloseImport}>
+                            {importSuccess ? 'Fechar' : 'Cancelar'}
+                        </Button>
+                        {!importSuccess && (
+                            <Button
+                                onClick={handleImportTemplate}
+                                disabled={!selectedTemplateId || !importName.trim() || isImporting}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            >
+                                {isImporting ? 'Importando…' : 'Importar Funil'}
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -327,6 +327,25 @@ async function executeAction(
                 .replace(/\{\{name\}\}/gi, deal?.contacts?.name ?? phone)
                 .replace(/\{\{phone\}\}/gi, phone)
 
+            // Substitui [LINK_APP] por link rastreável único por envio
+            if (text.includes('[LINK_APP]')) {
+                try {
+                    const { createAppLinkToken, buildOneLinkUrl } = await import('@/lib/app-link')
+                    const token = await createAppLinkToken({
+                        dealId,
+                        contactId: deal?.contact_id ?? null,
+                        campaignName: 'trigger',
+                    })
+                    if (token) {
+                        const trackedUrl = buildOneLinkUrl(token, phone)
+                        text = text.replace(/\[LINK_APP\]/g, trackedUrl)
+                    }
+                } catch (e) {
+                    console.warn('[TriggerEngine] Falha ao gerar link rastreável:', e)
+                    // Mantém [LINK_APP] literal se falhar — não bloqueia o envio
+                }
+            }
+
             await fetch(
                 `https://graph.facebook.com/v24.0/${creds.phoneNumberId}/messages`,
                 {
