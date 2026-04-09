@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { RefreshCw, Settings2, Plus } from 'lucide-react'
+import { RefreshCw, Settings2, Plus, BarChart2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Page, PageHeader, PageTitle, PageDescription } from '@/components/ui/page'
 import { KanbanBoard } from '@/components/features/crm/KanbanBoard'
@@ -138,6 +138,17 @@ export default function CRMKanbanPage() {
                         className="border-zinc-700 text-zinc-400 hover:text-zinc-100"
                     >
                         <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        className="border-zinc-700 text-zinc-400 hover:text-zinc-100"
+                    >
+                        <Link href="/crm/analytics">
+                            <BarChart2 className="h-4 w-4 mr-1.5" />
+                            Analytics
+                        </Link>
                     </Button>
                     <Button
                         variant="outline"

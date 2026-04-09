@@ -1145,3 +1145,71 @@ export interface UpdateFunnelDTO {
   isActive?: boolean;
 }
 
+// =============================================================================
+// CRM ANALYTICS TYPES (Fase 3)
+// =============================================================================
+
+export interface CRMSummary {
+  totalDeals: number;
+  openDeals: number;
+  wonDeals: number;
+  lostDeals: number;
+  totalValueOpen: number;
+  totalValueWon: number;
+  avgDealValue: number;
+  conversionRate: number;
+  newLeadsPeriod: number;
+}
+
+export interface StageConversionRate {
+  stageId: string;
+  stageName: string;
+  stageOrder: number;
+  stageColor: string;
+  totalDeals: number;
+  wonFromStage: number;
+  lostFromStage: number;
+  conversionRate: number;
+  avgTimeSeconds: number;
+}
+
+export interface LeadsTimelinePoint {
+  day: string;
+  newLeads: number;
+  wonDeals: number;
+  lostDeals: number;
+}
+
+export interface AttendantPerformance {
+  attendant: string;
+  totalDeals: number;
+  openDeals: number;
+  wonDeals: number;
+  lostDeals: number;
+  totalValue: number;
+  wonValue: number;
+  conversionRate: number;
+}
+
+export interface LeadsBySource {
+  source: string;
+  total: number;
+  won: number;
+  percentage: number;
+}
+
+export interface CRMAnalyticsData {
+  summary: CRMSummary;
+  conversionRates: StageConversionRate[];
+  timeline: LeadsTimelinePoint[];
+  attendants: AttendantPerformance[];
+  bySource: LeadsBySource[];
+}
+
+export interface CRMAnalyticsParams {
+  funnelId?: string | null;
+  startDate?: string;
+  endDate?: string;
+  days?: number;
+}
+
