@@ -264,6 +264,7 @@ export interface TriggerBuilderValue {
     name: string
     triggerType: TriggerType
     triggerConfig: TriggerConfig
+    stageId?: string
     actions: { order: number; actionType: TriggerActionType; actionConfig: TriggerActionConfig }[]
 }
 

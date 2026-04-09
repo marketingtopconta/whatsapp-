@@ -450,7 +450,7 @@ export default function TriggersPage() {
             </div>
           )}
 
-          <TriggerBuilder value={builderValue} onChange={setBuilderValue} stages={stages} />
+          <TriggerBuilder value={builderValue} onChange={(v) => setBuilderValue(prev => ({ ...prev, ...v }))} stages={stages} />
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
@@ -506,7 +506,7 @@ export default function TriggersPage() {
             </div>
           )}
 
-          <TriggerBuilder value={builderValue} onChange={setBuilderValue} stages={stages} />
+          <TriggerBuilder value={builderValue} onChange={(v) => setBuilderValue(prev => ({ ...prev, ...v }))} stages={stages} />
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setEditTrigger(null)}>Cancelar</Button>
