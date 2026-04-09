@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { RefreshCw, Settings2, Plus, BarChart2 } from 'lucide-react'
+import { RefreshCw, Settings2, Plus, BarChart2, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Page, PageHeader, PageTitle, PageDescription } from '@/components/ui/page'
 import { KanbanBoard } from '@/components/features/crm/KanbanBoard'
@@ -154,11 +154,11 @@ export default function CRMKanbanPage() {
                         variant="outline"
                         size="sm"
                         asChild
-                        className="border-zinc-700 text-zinc-400 hover:text-zinc-100"
+                        className="border-amber-600/40 text-amber-400 hover:text-amber-300 hover:border-amber-500/60 hover:bg-amber-500/10"
                     >
-                        <Link href="/crm/triggers">
-                            <Settings2 className="h-4 w-4 mr-1.5" />
-                            Automações
+                        <Link href={`/crm/triggers${activeFunnelId ? `?funnel=${activeFunnelId}` : ''}`}>
+                            <Zap className="h-4 w-4 mr-1.5 fill-current opacity-80" />
+                            Automatize
                         </Link>
                     </Button>
                     <Button
