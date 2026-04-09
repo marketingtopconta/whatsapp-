@@ -1,155 +1,246 @@
 'use client'
 
 /**
- * FunnelAutomationBoard
- *
- * Visão kanban das automações por estágio do funil.
- * Cada coluna representa um estágio e exibe os triggers configurados
- * com suas ações, além de um botão para adicionar novo trigger naquele estágio.
+ * FunnelAutomationBoard — board de automações no mesmo estilo visual do KanbanBoard.
+ * Cada coluna = um estágio, cada card = um trigger configurado.
+ * Clicar em um card abre o painel de edição lateral.
  */
 
-import { useState } from 'react'
-import { Plus, Zap, ToggleRight, ToggleLeft, Pencil, Trash2, Clock, MessageSquare, ArrowRight, Tag, User, Webhook, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { TRIGGER_TYPE_LABELS, ACTION_TYPE_LABELS } from '@/components/features/crm/TriggerBuilder'
-import type { Trigger, TriggerActionType, PipelineStage } from '@/types'
+import { Plus, Zap, Pencil, Trash2, ToggleRight, ToggleLeft, Clock, MessageSquare, ArrowRight, Tag, CheckCircle, XCircle, AlertCircle, GripVertical } from 'lucide-react'
+import type { Trigger, PipelineStage } from '@/types'
 
 // =============================================================================
-// Ícones por tipo de trigger
+// Helpers de resumo por tipo de trigger
 // =============================================================================
 
-const TRIGGER_ICONS: Record<string, React.ReactNode> = {
-  time_no_reply: <Clock className="h-3 w-3" />,
-  keyword:       <MessageSquare className="h-3 w-3" />,
-  stage_enter:   <ArrowRight className="h-3 w-3" />,
-  stage_exit:    <ArrowRight className="h-3 w-3 rotate-180" />,
-  deal_won:      <CheckCircle className="h-3 w-3" />,
-  deal_lost:     <XCircle className="h-3 w-3" />,
-  tag_added:     <Tag className="h-3 w-3" />,
+const TRIGGER_COLOR: Record<string, string> = {
+  time_no_reply: '#f59e0b',
+  keyword:       '#3b82f6',
+  stage_enter:   '#10b981',
+  stage_exit:    '#8b5cf6',
+  deal_won:      '#22c55e',
+  deal_lost:     '#ef4444',
+  tag_added:     '#ec4899',
 }
 
-const ACTION_ICONS: Record<TriggerActionType, React.ReactNode> = {
-  send_template: <span className="text-[9px]">📤</span>,
-  send_text:     <span className="text-[9px]">💬</span>,
-  move_stage:    <span className="text-[9px]">➡️</span>,
-  add_tag:       <span className="text-[9px]">🏷</span>,
-  assign_to:     <span className="text-[9px]">👤</span>,
-  wait:          <span className="text-[9px]">⏳</span>,
-  mark_won:      <span className="text-[9px]">✅</span>,
-  mark_lost:     <span className="text-[9px]">❌</span>,
-  webhook:       <span className="text-[9px]">🔗</span>,
-}
-
-// =============================================================================
-// Resumo curto de configuração do trigger
-// =============================================================================
-
-function triggerSummary(trigger: Trigger): string {
+function triggerConditionLabel(trigger: Trigger): string {
   const cfg = trigger.triggerConfig
   switch (trigger.triggerType) {
     case 'time_no_reply':
-      return `Após ${cfg.minutes ?? '?'} min sem resposta`
+      return `Sem resposta após ${cfg.minutes ?? '?'} min`
     case 'keyword': {
-      const kw = (cfg.keywords ?? []).slice(0, 3).join(', ')
-      return kw ? `Palavras: ${kw}` : 'Palavras-chave'
+      const kw = (cfg.keywords ?? []).slice(0, 2).join(', ')
+      return kw ? `Palavras: "${kw}"${(cfg.keywords?.length ?? 0) > 2 ? '…' : ''}` : 'Palavra-chave recebida'
     }
-    case 'stage_enter': return 'Ao entrar neste estágio'
-    case 'stage_exit':  return 'Ao sair do estágio'
+    case 'stage_enter': return 'Quando movido para esta etapa'
+    case 'stage_exit':  return 'Quando sai desta etapa'
     case 'deal_won':    return 'Quando deal for ganho'
     case 'deal_lost':   return 'Quando deal for perdido'
-    case 'tag_added':   return cfg.tag ? `Tag: "${cfg.tag}"` : 'Tag adicionada'
-    default:            return TRIGGER_TYPE_LABELS[trigger.triggerType] ?? trigger.triggerType
+    case 'tag_added':   return cfg.tag ? `Tag "${cfg.tag}" adicionada` : 'Tag adicionada'
+    default:            return trigger.triggerType
   }
 }
 
+function actionsLabel(trigger: Trigger): string {
+  const actions = (trigger.actions ?? []).sort((a, b) => a.order - b.order)
+  if (actions.length === 0) return 'Sem ações'
+  const labels: Record<string, string> = {
+    send_template: 'Enviar template',
+    send_text:     'Enviar mensagem',
+    move_stage:    'Alterar etapa lead',
+    add_tag:       'Adicionar tag',
+    assign_to:     'Atribuir atendente',
+    wait:          `Aguardar ${actions.find(a => a.actionType === 'wait')?.actionConfig?.minutes ?? '?'} min`,
+    mark_won:      'Marcar como ganho',
+    mark_lost:     'Marcar como perdido',
+    webhook:       'Chamar webhook',
+  }
+  // Exibe as ações mais relevantes (não 'wait')
+  const mainActions = actions.filter(a => a.actionType !== 'wait')
+  if (mainActions.length === 0) return labels[actions[0]?.actionType] ?? 'Aguardar'
+  return mainActions.slice(0, 2).map(a => labels[a.actionType] ?? a.actionType).join(' + ')
+}
+
 // =============================================================================
-// Card individual de trigger
+// Card de trigger — estilo DealCard
 // =============================================================================
 
 interface TriggerCardProps {
   trigger: Trigger
-  stageColor?: string
+  stageColor: string
+  onClick: (t: Trigger) => void
+  onDelete: (t: Trigger) => void
+  onToggle: (t: Trigger) => void
+}
+
+function TriggerCard({ trigger, stageColor, onClick, onDelete, onToggle }: TriggerCardProps) {
+  const accent = TRIGGER_COLOR[trigger.triggerType] ?? stageColor
+  const actions = (trigger.actions ?? []).sort((a, b) => a.order - b.order)
+  const hasWait = actions.some(a => a.actionType === 'wait')
+  const waitMin = actions.find(a => a.actionType === 'wait')?.actionConfig?.minutes
+
+  return (
+    <div
+      className={`group relative rounded-lg border cursor-pointer select-none transition-all ${
+        trigger.isActive
+          ? 'bg-zinc-800 border-zinc-700 hover:border-zinc-500 hover:bg-zinc-750'
+          : 'bg-zinc-900/60 border-zinc-800/60 opacity-50 hover:opacity-70'
+      }`}
+      style={{ borderLeft: `3px solid ${accent}` }}
+      onClick={() => onClick(trigger)}
+    >
+      <div className="p-3">
+        {/* Status badge se inativo */}
+        {!trigger.isActive && (
+          <span className="absolute top-2 right-2 text-[9px] bg-zinc-700 text-zinc-400 px-1.5 py-0.5 rounded">
+            inativo
+          </span>
+        )}
+
+        {/* Condição do trigger */}
+        <p className="text-[11px] text-zinc-400 leading-tight mb-1 pr-8">
+          {triggerConditionLabel(trigger)}
+          {hasWait && waitMin && (
+            <span className="ml-1 text-amber-400/80">· após {waitMin}min</span>
+          )}
+        </p>
+
+        {/* Ação principal — destaque */}
+        <p className="text-xs font-semibold text-zinc-100 leading-snug mb-2 pr-8">
+          {actionsLabel(trigger)}
+        </p>
+
+        {/* Pills de ações */}
+        {actions.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {actions.slice(0, 3).map((a, i) => (
+              <span
+                key={i}
+                className="text-[9px] px-1.5 py-0.5 rounded"
+                style={{ backgroundColor: accent + '18', color: accent, border: `1px solid ${accent}30` }}
+              >
+                {{
+                  send_template: '📤 template',
+                  send_text:     '💬 texto',
+                  move_stage:    '➡️ mover etapa',
+                  add_tag:       '🏷 tag',
+                  assign_to:     '👤 atribuir',
+                  wait:          `⏳ ${a.actionConfig?.minutes}min`,
+                  mark_won:      '✅ ganho',
+                  mark_lost:     '❌ perdido',
+                  webhook:       '🔗 webhook',
+                }[a.actionType] ?? a.actionType}
+              </span>
+            ))}
+            {actions.length > 3 && (
+              <span className="text-[9px] text-zinc-600 px-1 py-0.5">
+                +{actions.length - 3}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Ações hover — no canto inferior direito */}
+      <div className="absolute bottom-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle(trigger) }}
+          title={trigger.isActive ? 'Desativar' : 'Ativar'}
+          className="p-1 rounded hover:bg-zinc-600 transition-colors"
+        >
+          {trigger.isActive
+            ? <ToggleRight className="h-3 w-3 text-emerald-400" />
+            : <ToggleLeft className="h-3 w-3 text-zinc-400" />
+          }
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(trigger) }}
+          className="p-1 rounded hover:bg-red-900/50 transition-colors"
+        >
+          <Trash2 className="h-3 w-3 text-zinc-500 hover:text-red-400" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// Coluna de estágio — idêntica ao KanbanColumn
+// =============================================================================
+
+interface AutomationColumnProps {
+  stage: PipelineStage
+  triggers: Trigger[]
+  onAdd: (stageId: string) => void
   onEdit: (t: Trigger) => void
   onDelete: (t: Trigger) => void
   onToggle: (t: Trigger) => void
 }
 
-function TriggerCard({ trigger, stageColor, onEdit, onDelete, onToggle }: TriggerCardProps) {
-  const actions = trigger.actions ?? []
-  const accent = stageColor ?? '#6366f1'
+function AutomationColumn({ stage, triggers, onAdd, onEdit, onDelete, onToggle }: AutomationColumnProps) {
+  const activeTriggers = triggers.filter(t => t.isActive)
 
   return (
-    <div
-      className={`group relative rounded-lg border transition-all ${
-        trigger.isActive
-          ? 'bg-zinc-800/80 border-zinc-700 hover:border-zinc-600'
-          : 'bg-zinc-900/40 border-zinc-800/50 opacity-60'
-      }`}
-    >
-      {/* Barra colorida lateral */}
-      <div
-        className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full"
-        style={{ backgroundColor: accent }}
-      />
+    <div className="flex flex-col h-full min-w-[260px] max-w-[280px] shrink-0">
+      {/* Cabeçalho — idêntico ao KanbanColumn */}
+      <div className="flex items-center gap-2 mb-2 px-1">
+        <GripVertical className="h-3.5 w-3.5 text-zinc-600 shrink-0" />
+        <span
+          className="h-2.5 w-2.5 rounded-full shrink-0"
+          style={{ backgroundColor: stage.color }}
+        />
+        <span className="text-sm font-medium text-zinc-200 truncate flex-1">
+          {stage.name}
+        </span>
+        <span className="text-xs text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded-full shrink-0">
+          {activeTriggers.length}
+        </span>
+        {stage.isEntryStage && (
+          <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded shrink-0">
+            entrada
+          </span>
+        )}
+        {stage.isWonStage && (
+          <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded shrink-0">
+            ganho
+          </span>
+        )}
+        {stage.isLostStage && (
+          <span className="text-[9px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded shrink-0">
+            perdido
+          </span>
+        )}
+      </div>
 
-      <div className="pl-3 pr-2 py-2.5">
-        {/* Linha do tipo de trigger */}
-        <div className="flex items-start justify-between gap-1">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-zinc-400 shrink-0" style={{ color: accent }}>
-              {TRIGGER_ICONS[trigger.triggerType] ?? <Zap className="h-3 w-3" />}
-            </span>
-            <span className="text-[11px] font-medium text-zinc-200 truncate leading-tight">
-              {trigger.name}
-            </span>
-          </div>
-          {/* Botões — ficam visíveis no hover */}
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-            <button
-              onClick={() => onToggle(trigger)}
-              title={trigger.isActive ? 'Desativar' : 'Ativar'}
-              className="p-1 rounded text-zinc-500 hover:text-emerald-400 transition-colors"
-            >
-              {trigger.isActive
-                ? <ToggleRight className="h-3.5 w-3.5 text-emerald-400" />
-                : <ToggleLeft className="h-3.5 w-3.5" />
-              }
-            </button>
-            <button
-              onClick={() => onEdit(trigger)}
-              className="p-1 rounded text-zinc-500 hover:text-zinc-200 transition-colors"
-            >
-              <Pencil className="h-3 w-3" />
-            </button>
-            <button
-              onClick={() => onDelete(trigger)}
-              className="p-1 rounded text-zinc-500 hover:text-red-400 transition-colors"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
-        </div>
+      {/* Botão adicionar — no topo, como "Adicionar dicas" da referência */}
+      <button
+        onClick={() => onAdd(stage.id)}
+        className="mb-2 flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-emerald-400 px-2 py-1 rounded hover:bg-zinc-800/50 transition-colors w-full"
+      >
+        <Plus className="h-3 w-3" />
+        Adicionar gatilho
+      </button>
 
-        {/* Condição */}
-        <p className="text-[10px] text-zinc-500 mt-0.5 ml-4.5 leading-relaxed">
-          {triggerSummary(trigger)}
-        </p>
-
-        {/* Ações */}
-        {actions.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5 ml-4">
-            {actions
-              .sort((a, b) => a.order - b.order)
-              .map((action, i) => (
-                <span
-                  key={i}
-                  className="inline-flex items-center gap-0.5 text-[9px] bg-zinc-700/60 text-zinc-400 px-1.5 py-0.5 rounded"
-                >
-                  {ACTION_ICONS[action.actionType]}
-                  <span>{ACTION_TYPE_LABELS[action.actionType]?.replace(/^[^\s]+\s/, '')}</span>
-                </span>
-              ))}
+      {/* Área das automações */}
+      <div className="flex-1 flex flex-col gap-2 rounded-xl p-2 min-h-[200px] bg-zinc-900/40 overflow-y-auto">
+        {triggers.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-zinc-700 border border-dashed border-zinc-800 rounded-lg py-8 gap-2">
+            <AlertCircle className="h-5 w-5 opacity-30" />
+            <p className="text-xs text-center px-2 leading-relaxed">
+              Sem automações nesta etapa
+            </p>
           </div>
+        ) : (
+          triggers.map((trigger) => (
+            <TriggerCard
+              key={trigger.id}
+              trigger={trigger}
+              stageColor={stage.color ?? '#6366f1'}
+              onClick={onEdit}
+              onDelete={onDelete}
+              onToggle={onToggle}
+            />
+          ))
         )}
       </div>
     </div>
@@ -157,84 +248,53 @@ function TriggerCard({ trigger, stageColor, onEdit, onDelete, onToggle }: Trigge
 }
 
 // =============================================================================
-// Coluna de estágio
+// Coluna de triggers globais (sem estágio vinculado)
 // =============================================================================
 
-interface StageColumnProps {
-  stage: PipelineStage
+interface GlobalColumnProps {
   triggers: Trigger[]
-  globalTriggers?: Trigger[]
-  onAdd: (stageId: string) => void
+  onAdd: () => void
   onEdit: (t: Trigger) => void
   onDelete: (t: Trigger) => void
   onToggle: (t: Trigger) => void
 }
 
-function StageColumn({ stage, triggers, onAdd, onEdit, onDelete, onToggle }: StageColumnProps) {
-  const activeTriggers = triggers.filter((t) => t.isActive)
+function GlobalColumn({ triggers, onAdd, onEdit, onDelete, onToggle }: GlobalColumnProps) {
+  if (triggers.length === 0) return null
 
   return (
-    <div className="flex flex-col w-72 shrink-0">
-      {/* Cabeçalho do estágio */}
-      <div className="flex items-center justify-between mb-2 px-0.5">
-        <div className="flex items-center gap-2">
-          <div
-            className="w-2.5 h-2.5 rounded-full shrink-0"
-            style={{ backgroundColor: stage.color ?? '#6366f1' }}
-          />
-          <span className="text-xs font-semibold text-zinc-200 truncate max-w-[160px]">
-            {stage.name}
-          </span>
-          {stage.isEntryStage && (
-            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded shrink-0">
-              entrada
-            </span>
-          )}
-          {stage.isWonStage && (
-            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded shrink-0">
-              ganho
-            </span>
-          )}
-          {stage.isLostStage && (
-            <span className="text-[9px] bg-red-500/20 text-red-400 px-1 py-0.5 rounded shrink-0">
-              perdido
-            </span>
-          )}
-        </div>
-        <span className="text-[10px] text-zinc-600 shrink-0">
-          {activeTriggers.length}/{triggers.length}
+    <div className="flex flex-col h-full min-w-[260px] max-w-[280px] shrink-0">
+      <div className="flex items-center gap-2 mb-2 px-1">
+        <GripVertical className="h-3.5 w-3.5 text-zinc-600 shrink-0" />
+        <span className="h-2.5 w-2.5 rounded-full bg-zinc-500 shrink-0" />
+        <span className="text-sm font-medium text-zinc-400 truncate flex-1">
+          Qualquer etapa
+        </span>
+        <span className="text-xs text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded-full shrink-0">
+          {triggers.length}
         </span>
       </div>
 
-      {/* Área dos triggers — scroll vertical */}
-      <div className="flex-1 rounded-xl bg-zinc-900/60 border border-zinc-800 p-2 space-y-1.5 min-h-[120px] overflow-y-auto max-h-[calc(100vh-280px)]">
-        {triggers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-24 text-zinc-600">
-            <AlertCircle className="h-5 w-5 mb-1 opacity-30" />
-            <p className="text-[11px]">Sem automações</p>
-          </div>
-        ) : (
-          triggers.map((trigger) => (
-            <TriggerCard
-              key={trigger.id}
-              trigger={trigger}
-              stageColor={stage.color ?? undefined}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onToggle={onToggle}
-            />
-          ))
-        )}
-      </div>
-
-      {/* Botão adicionar */}
       <button
-        onClick={() => onAdd(stage.id)}
-        className="mt-2 w-full flex items-center justify-center gap-1.5 text-[11px] text-zinc-500 hover:text-emerald-400 py-2 rounded-lg border border-dashed border-zinc-700 hover:border-emerald-500/50 transition-colors"
+        onClick={onAdd}
+        className="mb-2 flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-emerald-400 px-2 py-1 rounded hover:bg-zinc-800/50 transition-colors w-full"
       >
         <Plus className="h-3 w-3" />
-        Adicionar trigger
+        Adicionar gatilho global
       </button>
+
+      <div className="flex-1 flex flex-col gap-2 rounded-xl p-2 min-h-[200px] bg-zinc-900/40 border border-dashed border-zinc-800 overflow-y-auto">
+        {triggers.map((trigger) => (
+          <TriggerCard
+            key={trigger.id}
+            trigger={trigger}
+            stageColor="#6366f1"
+            onClick={onEdit}
+            onDelete={onDelete}
+            onToggle={onToggle}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -262,16 +322,19 @@ export function FunnelAutomationBoard({
   onToggle,
   isLoading,
 }: FunnelAutomationBoardProps) {
-  // Triggers sem estágio específico (se aplicam ao funil inteiro)
-  const globalTriggers = triggers.filter((t) => !t.stageId)
+  const globalTriggers = triggers.filter(t => !t.stageId)
 
   if (isLoading) {
     return (
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="w-72 shrink-0 space-y-2">
-            <div className="h-5 w-40 bg-zinc-800 rounded animate-pulse" />
-            <div className="h-48 bg-zinc-900 rounded-xl border border-zinc-800 animate-pulse" />
+      <div className="flex gap-4 h-full">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="min-w-[260px] max-w-[280px] shrink-0">
+            <div className="h-5 w-36 bg-zinc-800 rounded mb-3 animate-pulse" />
+            <div className="bg-zinc-900/40 rounded-xl p-2 space-y-2 min-h-[200px]">
+              {[1, 2].map(j => (
+                <div key={j} className="h-20 bg-zinc-800/60 rounded-lg animate-pulse" />
+              ))}
+            </div>
           </div>
         ))}
       </div>
@@ -280,60 +343,40 @@ export function FunnelAutomationBoard({
 
   if (stages.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
-        <Zap className="h-10 w-10 mb-3 opacity-30" />
-        <p className="text-sm">Selecione um funil com estágios para ver as automações.</p>
+      <div className="flex items-center justify-center h-full text-zinc-500 text-sm">
+        <div className="text-center">
+          <Zap className="h-10 w-10 mx-auto mb-3 opacity-20" />
+          <p>Selecione um funil com estágios configurados.</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4 pr-4">
-      {/* Coluna de triggers globais (sem estágio vinculado) */}
+    <div className="flex gap-4 pb-6 h-full min-h-[500px]">
+      {/* Coluna global (sem estágio) — apenas se existir */}
       {globalTriggers.length > 0 && (
-        <div className="flex flex-col w-72 shrink-0">
-          <div className="flex items-center gap-2 mb-2 px-0.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-zinc-500 shrink-0" />
-            <span className="text-xs font-semibold text-zinc-400">Qualquer estágio</span>
-            <span className="text-[10px] text-zinc-600">{globalTriggers.length}</span>
-          </div>
-          <div className="flex-1 rounded-xl bg-zinc-900/60 border border-zinc-800 border-dashed p-2 space-y-1.5 min-h-[120px] overflow-y-auto max-h-[calc(100vh-280px)]">
-            {globalTriggers.map((trigger) => (
-              <TriggerCard
-                key={trigger.id}
-                trigger={trigger}
-                stageColor="#6366f1"
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onToggle={onToggle}
-              />
-            ))}
-          </div>
-          <button
-            onClick={() => onAdd(undefined)}
-            className="mt-2 w-full flex items-center justify-center gap-1.5 text-[11px] text-zinc-500 hover:text-emerald-400 py-2 rounded-lg border border-dashed border-zinc-700 hover:border-emerald-500/50 transition-colors"
-          >
-            <Plus className="h-3 w-3" />
-            Adicionar trigger global
-          </button>
-        </div>
+        <GlobalColumn
+          triggers={globalTriggers}
+          onAdd={() => onAdd(undefined)}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onToggle={onToggle}
+        />
       )}
 
       {/* Colunas por estágio */}
-      {stages.map((stage) => {
-        const stageTriggers = triggers.filter((t) => t.stageId === stage.id)
-        return (
-          <StageColumn
-            key={stage.id}
-            stage={stage}
-            triggers={stageTriggers}
-            onAdd={onAdd}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onToggle={onToggle}
-          />
-        )
-      })}
+      {stages.map(stage => (
+        <AutomationColumn
+          key={stage.id}
+          stage={stage}
+          triggers={triggers.filter(t => t.stageId === stage.id)}
+          onAdd={onAdd}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onToggle={onToggle}
+        />
+      ))}
     </div>
   )
 }
