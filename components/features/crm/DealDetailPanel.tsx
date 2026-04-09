@@ -16,6 +16,8 @@ import {
     Send,
     Trash2,
     CheckCircle2,
+    MessageCircle,
+    ClipboardList,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,7 +31,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { dealService } from '@/services/crmService'
 import { toast } from 'sonner'
 import { CRM_KEYS } from '@/hooks/useCRM'
+import { DealChatPanel } from '@/components/features/crm/DealChatPanel'
 import type { Deal, DealActivity, DealActivityType, UpdateDealDTO } from '@/types'
+
+type PanelTab = 'details' | 'chat'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -97,6 +102,7 @@ export function DealDetailPanel({
     onMarkLost,
     onDelete,
 }: DealDetailPanelProps) {
+    const [activeTab, setActiveTab] = useState<PanelTab>('details')
     const [isEditingTitle, setIsEditingTitle] = useState(false)
     const [titleInput, setTitleInput] = useState('')
     const [valueInput, setValueInput] = useState('')
@@ -245,8 +251,43 @@ export function DealDetailPanel({
                 </button>
             </div>
 
-            {/* Conteúdo scrollável */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-5">
+            {/* Tabs */}
+            <div className="flex border-b border-zinc-800 shrink-0">
+                <button
+                    onClick={() => setActiveTab('details')}
+                    className={cn(
+                        'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
+                        activeTab === 'details'
+                            ? 'border-emerald-500 text-emerald-400'
+                            : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                    )}
+                >
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    Detalhes
+                </button>
+                <button
+                    onClick={() => setActiveTab('chat')}
+                    className={cn(
+                        'flex items-center gap-1.5 px-4 py-2 text-xs font-medium border-b-2 transition-colors',
+                        activeTab === 'chat'
+                            ? 'border-emerald-500 text-emerald-400'
+                            : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                    )}
+                >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    Chat WhatsApp
+                </button>
+            </div>
+
+            {/* Tab: Chat */}
+            {activeTab === 'chat' && (
+                <div className="flex-1 min-h-0 overflow-hidden">
+                    <DealChatPanel dealId={deal.id} />
+                </div>
+            )}
+
+            {/* Tab: Detalhes — conteúdo scrollável */}
+            {activeTab === 'details' && <div className="flex-1 overflow-y-auto p-4 space-y-5">
                 {/* Contato */}
                 {deal.contact && (
                     <div className="flex items-center gap-2 text-sm text-zinc-400">
@@ -394,23 +435,25 @@ export function DealDetailPanel({
                         </div>
                     )}
                 </div>
-            </div>
+            </div>}
 
-            {/* Footer: deletar */}
-            <div className="px-4 py-3 border-t border-zinc-800">
-                <button
-                    onClick={() => {
-                        if (confirm('Remover este deal permanentemente?')) {
-                            onDelete(deal.id)
-                            onClose()
-                        }
-                    }}
-                    className="flex items-center gap-1.5 text-xs text-zinc-600 hover:text-red-400 transition-colors"
-                >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Remover deal
-                </button>
-            </div>
+            {/* Footer: deletar — só visível na aba detalhes */}
+            {activeTab === 'details' && (
+                <div className="px-4 py-3 border-t border-zinc-800 shrink-0">
+                    <button
+                        onClick={() => {
+                            if (confirm('Remover este deal permanentemente?')) {
+                                onDelete(deal.id)
+                                onClose()
+                            }
+                        }}
+                        className="flex items-center gap-1.5 text-xs text-zinc-600 hover:text-red-400 transition-colors"
+                    >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Remover deal
+                    </button>
+                </div>
+            )}
         </div>
     )
 }
