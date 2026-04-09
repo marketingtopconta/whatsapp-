@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { MessageBubble } from './MessageBubble'
 import { MessageInput } from './MessageInput'
 import { ConversationHeader } from './ConversationHeader'
+import { InboxFunnelStageSelector } from './InboxFunnelStageSelector'
 import type {
   InboxConversation,
   InboxMessage,
@@ -188,23 +189,29 @@ export function MessagePanel({
     <div className="flex flex-col h-full bg-[var(--ds-bg-base)] relative">
       {/* Header - integrated with content */}
       {conversation && (
-        <ConversationHeader
-          conversation={conversation}
-          labels={labels}
-          onModeToggle={onModeToggle}
-          onClose={onClose}
-          onReopen={onReopen}
-          onPriorityChange={onPriorityChange}
-          onLabelToggle={onLabelToggle}
-          onHandoff={onHandoff}
-          onReturnToBot={onReturnToBot}
-          onDelete={onDelete}
-          onConfigureAgent={onConfigureAgent}
-          isUpdating={isUpdating}
-          isHandingOff={isHandingOff}
-          isReturningToBot={isReturningToBot}
-          isDeleting={isDeleting}
-        />
+        <>
+          <ConversationHeader
+            conversation={conversation}
+            labels={labels}
+            onModeToggle={onModeToggle}
+            onClose={onClose}
+            onReopen={onReopen}
+            onPriorityChange={onPriorityChange}
+            onLabelToggle={onLabelToggle}
+            onHandoff={onHandoff}
+            onReturnToBot={onReturnToBot}
+            onDelete={onDelete}
+            onConfigureAgent={onConfigureAgent}
+            isUpdating={isUpdating}
+            isHandingOff={isHandingOff}
+            isReturningToBot={isReturningToBot}
+            isDeleting={isDeleting}
+          />
+          {/* CRM Stage selector — abaixo do header */}
+          <div className="px-3 py-1.5 border-b border-[var(--ds-border-subtle)] bg-[var(--ds-bg-base)]">
+            <InboxFunnelStageSelector phone={conversation.phone} />
+          </div>
+        </>
       )}
 
       {/* Messages area - clean scrollable container */}
