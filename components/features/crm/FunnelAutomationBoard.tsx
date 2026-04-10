@@ -89,7 +89,7 @@ function TriggerCard({ trigger, stageColor, onClick, onDelete, onToggle }: Trigg
   const accent = TRIGGER_COLOR[trigger.triggerType] ?? stageColor
   const actions = (trigger.actions ?? []).sort((a, b) => a.order - b.order)
   const hasWait = actions.some(a => a.actionType === 'wait')
-  const waitMin = actions.find(a => a.actionType === 'wait')?.actionConfig?.minutes
+  const waitMin = actions.find(a => a.actionType === 'wait')?.actionConfig?.minutes as number | undefined
 
   return (
     <div
