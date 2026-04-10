@@ -23,6 +23,18 @@ const TRIGGER_COLOR: Record<string, string> = {
   tag_added:     '#ec4899',
 }
 
+const ACTION_PILL_LABEL: Record<string, string> = {
+  send_template: '📤 template',
+  send_text:     '💬 texto',
+  move_stage:    '➡️ mover etapa',
+  add_tag:       '🏷 tag',
+  assign_to:     '👤 atribuir',
+  wait:          '⏳ aguardar',
+  mark_won:      '✅ ganho',
+  mark_lost:     '❌ perdido',
+  webhook:       '🔗 webhook',
+}
+
 function triggerConditionLabel(trigger: Trigger): string {
   const cfg = trigger.triggerConfig
   switch (trigger.triggerType) {
@@ -119,17 +131,9 @@ function TriggerCard({ trigger, stageColor, onClick, onDelete, onToggle }: Trigg
                 className="text-[9px] px-1.5 py-0.5 rounded"
                 style={{ backgroundColor: accent + '18', color: accent, border: `1px solid ${accent}30` }}
               >
-                {{
-                  send_template: '📤 template',
-                  send_text:     '💬 texto',
-                  move_stage:    '➡️ mover etapa',
-                  add_tag:       '🏷 tag',
-                  assign_to:     '👤 atribuir',
-                  wait:          `⏳ ${a.actionConfig?.minutes}min`,
-                  mark_won:      '✅ ganho',
-                  mark_lost:     '❌ perdido',
-                  webhook:       '🔗 webhook',
-                }[a.actionType] ?? a.actionType}
+                {a.actionType === 'wait'
+                  ? `⏳ ${(a.actionConfig as any)?.minutes ?? '?'}min`
+                  : (ACTION_PILL_LABEL[a.actionType] ?? a.actionType)}
               </span>
             ))}
             {actions.length > 3 && (
