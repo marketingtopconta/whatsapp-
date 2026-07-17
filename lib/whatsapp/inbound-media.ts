@@ -18,9 +18,13 @@ let bucketEnsured = false
 async function ensureBucket(client: SupabaseClient): Promise<void> {
   if (bucketEnsured) return
   try {
-    await client.storage.createBucket(BUCKET, { public: true, fileSizeLimit: 104857600 })
-  } catch {
-    // Bucket provavelmente já existe — ignora
+    const { error } = await client.storage.createBucket(BUCKET, { public: true, fileSizeLimit: 104857600 })
+    // createBucket retorna { error } em vez de lançar exceção — só ignora se já existir.
+    if (error && !/already exists/i.test(error.message)) {
+      console.warn(`[InboundMedia] Falha ao criar bucket "${BUCKET}":`, error.message)
+    }
+  } catch (error) {
+    console.warn(`[InboundMedia] Erro inesperado ao criar bucket "${BUCKET}":`, error)
   }
   bucketEnsured = true
 }
