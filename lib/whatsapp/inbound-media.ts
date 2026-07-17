@@ -7,17 +7,18 @@
  * que o Inbox possa renderizar.
  */
 
-import { supabase } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 const BUCKET = String(process.env.SUPABASE_INBOUND_MEDIA_BUCKET || 'whatsapp-inbound-media')
 
 let bucketEnsured = false
 
-async function ensureBucket(): Promise<void> {
-  if (bucketEnsured || !supabase) return
+async function ensureBucket(client: SupabaseClient): Promise<void> {
+  if (bucketEnsured) return
   try {
-    await supabase.storage.createBucket(BUCKET, { public: true, fileSizeLimit: 104857600 })
+    await client.storage.createBucket(BUCKET, { public: true, fileSizeLimit: 104857600 })
   } catch {
     // Bucket provavelmente já existe — ignora
   }
@@ -62,7 +63,10 @@ export async function downloadAndStoreInboundMedia(
   params: DownloadInboundMediaParams
 ): Promise<DownloadInboundMediaResult | null> {
   const { mediaId, waMessageId } = params
-  if (!mediaId || !supabase) return null
+  if (!mediaId) return null
+
+  const client = getSupabaseAdmin()
+  if (!client) return null
 
   try {
     const credentials = await getWhatsAppCredentials()
@@ -91,11 +95,11 @@ export async function downloadAndStoreInboundMedia(
     const buffer = Buffer.from(await fileRes.arrayBuffer())
 
     // 3. Sobe para o Supabase Storage
-    await ensureBucket()
+    await ensureBucket(client)
     const ext = guessExtFromContentType(contentType)
     const path = `${waMessageId || mediaId}.${ext}`
 
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await client.storage
       .from(BUCKET)
       .upload(path, buffer, { contentType, upsert: true })
 
@@ -104,7 +108,7 @@ export async function downloadAndStoreInboundMedia(
       return null
     }
 
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
+    const { data } = client.storage.from(BUCKET).getPublicUrl(path)
     if (!data?.publicUrl) return null
 
     return { url: data.publicUrl, mimeType: contentType }
