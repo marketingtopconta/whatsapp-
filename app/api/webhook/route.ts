@@ -41,6 +41,7 @@ import {
   handleInboundMessage,
   handleDeliveryStatus,
 } from '@/lib/inbox/inbox-webhook'
+import { downloadAndStoreInboundMedia } from '@/lib/whatsapp/inbound-media'
 
 // Get WhatsApp Access Token from centralized helper
 async function getWhatsAppAccessToken(): Promise<string | null> {
@@ -134,6 +135,12 @@ function extractInboundText(message: any): string {
 
   const interactiveListTitle = message?.interactive?.list_reply?.title
   if (typeof interactiveListTitle === 'string' && interactiveListTitle.trim()) return interactiveListTitle
+
+  const mediaCaption = message?.image?.caption || message?.video?.caption || message?.document?.caption
+  if (typeof mediaCaption === 'string' && mediaCaption.trim()) return mediaCaption
+
+  const documentFilename = message?.document?.filename
+  if (typeof documentFilename === 'string' && documentFilename.trim()) return documentFilename
 
   return ''
 }
@@ -951,13 +958,26 @@ export async function POST(request: NextRequest) {
           // T046-T047: Persist to Inbox and trigger AI if mode=bot
           // =================================================================
           try {
+            // Meta não envia URL de mídia no payload do webhook, só um media_id — é preciso
+            // resolver e baixar via Graph API para termos uma URL durável pro Inbox renderizar.
+            const mediaId =
+              message.image?.id || message.video?.id || message.audio?.id || message.document?.id || null
+            let mediaUrl: string | null = null
+            if (mediaId) {
+              const downloaded = await downloadAndStoreInboundMedia({
+                mediaId,
+                waMessageId: message.id || mediaId,
+              })
+              mediaUrl = downloaded?.url || null
+            }
+
             const inboxResult = await handleInboundMessage({
               messageId: message.id || '',
               from,
               type: messageType,
               text,
               timestamp: message.timestamp,
-              mediaUrl: message.image?.url || message.video?.url || message.audio?.url || message.document?.url || null,
+              mediaUrl,
               phoneNumberId: phoneNumberId || undefined,
             })
             console.log(`📥 Inbox: conversation=${inboxResult.conversationId}, message=${inboxResult.messageId}, ai=${inboxResult.triggeredAI}`)
