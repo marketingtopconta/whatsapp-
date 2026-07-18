@@ -573,10 +573,17 @@ export async function POST(request: NextRequest) {
   // OTIMIZAÇÃO V2: Paraleliza busca de defaultWorkflowId + keywordWorkflows
   // Antes: 2 queries sequenciais (~200ms cada)
   // Depois: 1 batch paralelo (~200ms total)
-  const [defaultWorkflowIdFromDb, allKeywordWorkflows] = await Promise.all([
+  const [defaultWorkflowIdFromDb, allKeywordWorkflows, webhookCredentials] = await Promise.all([
     settingsDb.get('workflow_builder_default_id'),
     loadKeywordWorkflows(null), // Carrega todos, filtra depois
+    getWhatsAppCredentials(),
   ])
+
+  // Uma mesma WABA pode ter múltiplos números de telefone, cada um usado por uma
+  // plataforma diferente (ex: outro app conectado à mesma conta comercial). A Meta
+  // manda uma cópia do evento pra todos os apps inscritos na WABA — sem filtrar por
+  // phone_number_id, processamos aqui mensagens que na verdade são de outro número.
+  const configuredPhoneNumberId = webhookCredentials?.phoneNumberId || null
 
   const defaultWorkflowId =
     defaultWorkflowIdFromDb ||
@@ -663,6 +670,20 @@ export async function POST(request: NextRequest) {
           } catch (e) {
             console.error('Failed to process template status update:', e)
           }
+        }
+
+        // =========================================================
+        // Filtra mensagens/status que não são do número configurado neste app
+        // (ver comentário acima de configuredPhoneNumberId). Template status
+        // updates (acima) não carregam phone_number_id — são a nível de WABA
+        // e continuam sendo processados normalmente.
+        // =========================================================
+        const changePhoneNumberId = change.value?.metadata?.phone_number_id || null
+        if (changePhoneNumberId && configuredPhoneNumberId && changePhoneNumberId !== configuredPhoneNumberId) {
+          console.log(
+            `⏭️ [Webhook] Ignorando evento de phone_number_id=${changePhoneNumberId} (este app está configurado para ${configuredPhoneNumberId})`
+          )
+          continue
         }
 
         const statuses = change.value?.statuses || []
