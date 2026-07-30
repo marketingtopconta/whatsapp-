@@ -19,6 +19,7 @@
 import React from 'react'
 import { renderHook, waitFor, type RenderHookOptions } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { CentralizedRealtimeProvider } from '@/components/providers/CentralizedRealtimeProvider'
 
 // Re-export para conveniência
 export { waitFor, act } from '@testing-library/react'
@@ -45,8 +46,12 @@ export function createTestQueryClient(): QueryClient {
 }
 
 /**
- * Wrapper com QueryClientProvider para uso com renderHook.
- * Cria um novo QueryClient para cada chamada (isolamento entre testes).
+ * Wrapper com QueryClientProvider + CentralizedRealtimeProvider para uso com
+ * renderHook. Cria um novo QueryClient para cada chamada (isolamento entre
+ * testes). O CentralizedRealtimeProvider é incluso pois hooks como
+ * useConversations/useConversation/useDashboard dependem do seu contexto
+ * (useRealtimeSubscription) - sem env vars de Supabase configuradas em teste,
+ * ele funciona em modo no-op (sem abrir canal real).
  */
 function createWrapper(queryClient?: QueryClient) {
   const client = queryClient ?? createTestQueryClient()
@@ -55,7 +60,7 @@ function createWrapper(queryClient?: QueryClient) {
     return React.createElement(
       QueryClientProvider,
       { client },
-      children
+      React.createElement(CentralizedRealtimeProvider, null, children)
     )
   }
 }

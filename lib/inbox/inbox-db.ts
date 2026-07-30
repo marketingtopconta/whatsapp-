@@ -57,6 +57,11 @@ export interface PaginatedConversations {
 
 /**
  * Get all conversations with optional filters and pagination
+ *
+ * Nota: os selects de `contact`/`ai_agent` usam strings literais (não
+ * interpoladas) propositalmente - o supabase-js infere o tipo de retorno
+ * fazendo parsing estático da string passada a `.select()`; usar template
+ * literals com variáveis quebra essa inferência (cardinalidade vira array).
  */
 export async function getConversations(
   filters: ConversationFilters = {}
@@ -64,11 +69,32 @@ export async function getConversations(
   const supabase = getClient()
   const { status, mode, labelId, search, page = 1, limit = 20 } = filters
 
+  // Filtro por etiqueta precisa ser resolvido ANTES da paginação (senão a
+  // paginação/total ficam incorretos). Como o embed com `!inner` filtraria
+  // também as OUTRAS labels da mesma conversa, resolvemos os ids via uma
+  // query separada (rápida - usa idx_inbox_conversation_labels_label_id).
+  let labelConversationIds: string[] | null = null
+  if (labelId) {
+    const { data: labelMatches, error: labelError } = await supabase
+      .from('inbox_conversation_labels')
+      .select('conversation_id')
+      .eq('label_id', labelId)
+
+    if (labelError) {
+      throw new Error(`Failed to filter by label: ${labelError.message}`)
+    }
+
+    labelConversationIds = (labelMatches || []).map((row) => row.conversation_id)
+    if (labelConversationIds.length === 0) {
+      return { conversations: [], total: 0, page, totalPages: 0 }
+    }
+  }
+
   let query = supabase
     .from('inbox_conversations')
     .select(`
       *,
-      contact:contacts(*),
+      contact:contacts(id, name, phone, email, status, tags),
       labels:inbox_conversation_labels(
         label:inbox_labels(*)
       ),
@@ -82,6 +108,9 @@ export async function getConversations(
   }
   if (mode) {
     query = query.eq('mode', mode)
+  }
+  if (labelConversationIds) {
+    query = query.in('id', labelConversationIds)
   }
   if (search) {
     query = query.or(`phone.ilike.%${search}%,contact.name.ilike.%${search}%`)
@@ -104,16 +133,8 @@ export async function getConversations(
     labels: conv.labels?.map((l: { label: InboxLabel }) => l.label).filter(Boolean) || [],
   })) as InboxConversation[]
 
-  // Filter by label if needed (post-query since it's a junction table)
-  let filtered = conversations
-  if (labelId) {
-    filtered = conversations.filter((c) =>
-      c.labels?.some((l) => l.id === labelId)
-    )
-  }
-
   return {
-    conversations: filtered,
+    conversations,
     total: count || 0,
     page,
     totalPages: Math.ceil((count || 0) / limit),
@@ -132,11 +153,11 @@ export async function getConversationById(
     .from('inbox_conversations')
     .select(`
       *,
-      contact:contacts(*),
+      contact:contacts(id, name, phone, email, status, tags),
       labels:inbox_conversation_labels(
         label:inbox_labels(*)
       ),
-      ai_agent:ai_agents(*)
+      ai_agent:ai_agents(id, name, is_active)
     `)
     .eq('id', id)
     .single()
@@ -154,6 +175,29 @@ export async function getConversationById(
 }
 
 /**
+ * Get only the phone number of a conversation - sem JOINs.
+ *
+ * Usado no hot path de envio de mensagem (sendMessage), que antes chamava
+ * getConversationById (3 JOINs) só para ler o telefone.
+ */
+export async function getConversationPhone(id: string): Promise<string | null> {
+  const supabase = getClient()
+
+  const { data, error } = await supabase
+    .from('inbox_conversations')
+    .select('phone')
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') return null // Not found
+    throw new Error(`Failed to fetch conversation phone: ${error.message}`)
+  }
+
+  return data.phone
+}
+
+/**
  * Find conversation by phone number (any status)
  * Used by webhook to find existing conversation
  */
@@ -167,11 +211,11 @@ export async function findConversationByPhone(
     .from('inbox_conversations')
     .select(`
       *,
-      contact:contacts(*),
+      contact:contacts(id, name, phone, email, status, tags),
       labels:inbox_conversation_labels(
         label:inbox_labels(*)
       ),
-      ai_agent:ai_agents(*)
+      ai_agent:ai_agents(id, name, is_active)
     `)
     .eq('phone', phone)
     .order('last_message_at', { ascending: false, nullsFirst: false })
@@ -914,6 +958,7 @@ export const inboxDb = {
   getConversations,
   getConversation: getConversationById,
   getConversationById,
+  getConversationPhone,
   findConversationByPhone,
   findConversationByPhoneLightweight, // Versão otimizada para webhook
   getOrCreateConversation,

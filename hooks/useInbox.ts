@@ -36,6 +36,12 @@ export function useInbox(options: UseInboxOptions = {}) {
 
   // State for filters
   const [search, setSearch] = useState('')
+  // Busca com debounce: evita 1 request HTTP + query no Postgres por tecla digitada
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(timeout)
+  }, [search])
   const [statusFilter, setStatusFilter] = useState<ConversationStatus | null>(null)
   const [modeFilter, setModeFilter] = useState<ConversationMode | null>(null)
   const [labelFilter, setLabelFilter] = useState<string | null>(null)
@@ -67,7 +73,7 @@ export function useInbox(options: UseInboxOptions = {}) {
     status: statusFilter ?? undefined,
     mode: modeFilter ?? undefined,
     labelId: labelFilter ?? undefined,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
     initialData: options.initialData?.conversations,
   })
 

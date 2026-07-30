@@ -14,7 +14,7 @@
  * - Reduced Supabase connection overhead
  */
 
-import { createContext, useContext, useEffect, useMemo, useRef, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useCallback, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { getSupabaseBrowser } from '@/lib/supabase'
 import { debounce } from '@/lib/utils'
@@ -79,7 +79,7 @@ export function CentralizedRealtimeProvider({
 }: CentralizedRealtimeProviderProps) {
   const queryClient = useQueryClient()
   const subscribersRef = useRef<Map<string, Set<SubscriptionCallback>>>(new Map())
-  const isConnectedRef = useRef(false)
+  const [isConnected, setIsConnected] = useState(false)
   // Tipo do channel do Supabase Realtime
   const channelRef = useRef<ReturnType<NonNullable<ReturnType<typeof getSupabaseBrowser>>['channel']> | null>(null)
 
@@ -173,7 +173,7 @@ export function CentralizedRealtimeProvider({
     // Activate channel
     let hasLoggedError = false
     channel.subscribe((status) => {
-      isConnectedRef.current = status === 'SUBSCRIBED'
+      setIsConnected(status === 'SUBSCRIBED')
       if (status === 'SUBSCRIBED') {
         hasLoggedError = false // Reset para logar novamente se reconectar e falhar depois
       } else if ((status === 'CLOSED' || status === 'CHANNEL_ERROR') && !hasLoggedError) {
@@ -190,7 +190,7 @@ export function CentralizedRealtimeProvider({
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
       }
-      isConnectedRef.current = false
+      setIsConnected(false)
     }
   }, [tables.join(','), notifySubscribers, debouncedInvalidate, debouncedFlush])
 
@@ -218,9 +218,9 @@ export function CentralizedRealtimeProvider({
   const value = useMemo<CentralizedRealtimeContextValue>(
     () => ({
       subscribe,
-      isConnected: isConnectedRef.current,
+      isConnected,
     }),
-    [subscribe]
+    [subscribe, isConnected]
   )
 
   return (

@@ -566,9 +566,10 @@ export async function POST(request: NextRequest) {
   // OTIMIZAÇÃO V2: Paraleliza busca de defaultWorkflowId + keywordWorkflows
   // Antes: 2 queries sequenciais (~200ms cada)
   // Depois: 1 batch paralelo (~200ms total)
-  const [defaultWorkflowIdFromDb, allKeywordWorkflows] = await Promise.all([
+  const [defaultWorkflowIdFromDb, allKeywordWorkflows, ownCredentials] = await Promise.all([
     settingsDb.get('workflow_builder_default_id'),
     loadKeywordWorkflows(null), // Carrega todos, filtra depois
+    getWhatsAppCredentials(),
   ])
 
   const defaultWorkflowId =
@@ -588,6 +589,28 @@ export async function POST(request: NextRequest) {
       const changes = entry.changes || []
 
       for (const change of changes) {
+        // =========================================================
+        // Guard: ignora eventos de outro phone_number_id
+        //
+        // A subscription de webhook do Meta é por WABA (não por número).
+        // Se a mesma WhatsApp Business Account tiver outro número
+        // registrado (ex: usado por outro sistema/cliente), os eventos
+        // desse número também chegam aqui. Sem este guard, este app
+        // processava e respondia (bot) mensagens que não são suas.
+        // Template status updates não têm phone_number_id (são no nível
+        // da WABA), então só ignoramos quando o campo está presente E
+        // diverge do número configurado - nunca quando está ausente.
+        // =========================================================
+        const changePhoneNumberId = change?.value?.metadata?.phone_number_id || null
+        if (
+          changePhoneNumberId &&
+          ownCredentials?.phoneNumberId &&
+          changePhoneNumberId !== ownCredentials.phoneNumberId
+        ) {
+          console.log(`⏭️ Ignorando evento de phone_number_id ${changePhoneNumberId} (não é o número configurado deste app)`)
+          continue
+        }
+
         // =========================================================
         // Template Status Updates (Meta)
         // =========================================================

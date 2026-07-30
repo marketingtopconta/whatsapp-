@@ -23,7 +23,19 @@ describe('dashboardService', () => {
     vi.resetAllMocks()
   })
 
-  it('getStats deve combinar stats e campanhas', async () => {
+  it('getStats deve combinar stats e chartData vindos da API', async () => {
+    // chartData agora vem pronto da API (agregado no Postgres via
+    // get_campaign_daily_stats), não é mais calculado a partir de
+    // campaignService.getAll() no client.
+    const chartData = Array.from({ length: 30 }, (_, i) => ({
+      name: `0${i + 1}/01`,
+      sent: 1,
+      read: 1,
+      delivered: 1,
+      failed: 0,
+      active: 0,
+    }))
+
     mockFetch.mockResolvedValueOnce(createMockFetchResponse({
       totalSent: 10,
       totalDelivered: 8,
@@ -31,23 +43,8 @@ describe('dashboardService', () => {
       totalFailed: 2,
       activeCampaigns: 1,
       deliveryRate: 80,
+      chartData,
     }))
-
-    ;(campaignService.getAll as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
-      {
-        id: 'c1',
-        name: 'Campanha',
-        status: 'Enviando',
-        recipients: 10,
-        sent: 10,
-        delivered: 8,
-        read: 5,
-        skipped: 0,
-        failed: 2,
-        createdAt: new Date().toISOString(),
-        templateName: 't',
-      },
-    ])
 
     const result = await dashboardService.getStats()
 
@@ -58,12 +55,12 @@ describe('dashboardService', () => {
 
   it('getStats deve usar defaults quando stats falha', async () => {
     mockFetch.mockResolvedValueOnce(createMockFetchResponse({}, { ok: false }))
-    ;(campaignService.getAll as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
 
     const result = await dashboardService.getStats()
 
     expect(result.sent24h).toBe('0')
     expect(result.failedMessages).toBe('0')
+    expect(result.chartData).toEqual([])
   })
 
   it('getRecentCampaigns deve retornar lista', async () => {
