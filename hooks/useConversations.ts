@@ -4,15 +4,15 @@
  */
 
 import { useMemo, useCallback } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useRealtimeQuery } from './useRealtimeQuery'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useRealtimeSubscription } from '@/components/providers/CentralizedRealtimeProvider'
 import {
   inboxService,
   type ConversationListParams,
   type ConversationListResult,
 } from '@/services/inboxService'
 import type { InboxConversation, ConversationStatus, ConversationMode } from '@/types'
-import { CACHE, REALTIME } from '@/lib/constants'
+import { CACHE } from '@/lib/constants'
 import { getConversationQueryKey } from './useConversation'
 
 // Default timeout: 0 = nunca expira (can be overridden by passing timeoutMs to switchMode)
@@ -64,18 +64,20 @@ export function useConversations(params: UseConversationsParams = {}) {
       }
     : undefined
 
-  // Query with real-time subscription
-  const query = useRealtimeQuery<ConversationListResult>({
+  const query = useQuery<ConversationListResult>({
     queryKey,
     queryFn: () => inboxService.listConversations(queryParams),
     initialData: queryInitialData,
     staleTime: CACHE.inbox, // 30s - user-facing list with realtime updates
     refetchOnWindowFocus: false,
-    // Real-time configuration
-    table: 'inbox_conversations',
-    events: ['INSERT', 'UPDATE', 'DELETE'],
-    debounceMs: REALTIME.debounceDefault,
   })
+
+  // Realtime: usa o canal único do CentralizedRealtimeProvider em vez de abrir
+  // uma subscription própria por instância do hook (evita canais duplicados).
+  const invalidateOnRealtime = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: CONVERSATIONS_LIST_KEY })
+  }, [queryClient])
+  useRealtimeSubscription('inbox_conversations', invalidateOnRealtime)
 
   // Computed values
   const conversations = query.data?.conversations ?? []

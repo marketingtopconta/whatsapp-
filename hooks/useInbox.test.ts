@@ -312,6 +312,7 @@ describe('useInbox', () => {
     })
 
     it('deve passar filtros para useConversations', () => {
+      vi.useFakeTimers()
       const { result } = renderHookWithProviders(() => useInbox())
 
       act(() => {
@@ -321,12 +322,19 @@ describe('useInbox', () => {
         result.current.onLabelFilterChange('label-1')
       })
 
+      // Busca tem debounce de 300ms antes de propagar para useConversations
+      act(() => {
+        vi.advanceTimersByTime(300)
+      })
+
       // Verifica que useConversations recebeu os filtros
       const lastCall = mockConversations.mock.calls[mockConversations.mock.calls.length - 1][0]
       expect(lastCall.search).toBe('test')
       expect(lastCall.status).toBe('open')
       expect(lastCall.mode).toBe('bot')
       expect(lastCall.labelId).toBe('label-1')
+
+      vi.useRealTimers()
     })
   })
 

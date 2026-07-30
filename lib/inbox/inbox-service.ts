@@ -6,6 +6,7 @@
 import {
   getConversations,
   getConversationById,
+  getConversationPhone,
   getOrCreateConversation,
   updateConversation,
   removeConversation,
@@ -118,14 +119,16 @@ export async function sendMessage(
   templateName?: string,
   templateParams?: Record<string, string[]>
 ): Promise<InboxMessage> {
-  // Get conversation to get phone number
-  const conversation = await getConversationById(conversationId)
-  if (!conversation) {
+  // Busca telefone (query leve, sem JOINs) e credenciais em paralelo,
+  // em vez de getConversationById (3 JOINs) só para ler o telefone.
+  const [phone, credentials] = await Promise.all([
+    getConversationPhone(conversationId),
+    getWhatsAppCredentials(),
+  ])
+
+  if (!phone) {
     throw new Error('Conversation not found')
   }
-
-  // Get WhatsApp credentials
-  const credentials = await getWhatsAppCredentials()
   if (!credentials) {
     throw new Error('WhatsApp credentials not configured')
   }
@@ -137,7 +140,7 @@ export async function sendMessage(
     if (messageType === 'template' && templateName) {
       // Send template message
       whatsappResult = await sendWhatsAppMessage({
-        to: conversation.phone,
+        to: phone,
         type: 'template',
         templateName,
         templateParams,
@@ -146,7 +149,7 @@ export async function sendMessage(
     } else {
       // Send text message
       whatsappResult = await sendWhatsAppMessage({
-        to: conversation.phone,
+        to: phone,
         type: 'text',
         text: content,
         credentials,

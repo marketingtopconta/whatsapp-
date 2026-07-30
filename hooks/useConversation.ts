@@ -3,7 +3,7 @@
  * Provides conversation details and message operations with real-time updates
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import {
   inboxService,
@@ -11,14 +11,8 @@ import {
   type UpdateConversationParams,
 } from '@/services/inboxService'
 import type { InboxConversation, InboxMessage, ConversationMode } from '@/types'
-import { CACHE, REALTIME } from '@/lib/constants'
-import { useRealtimeQuery } from './useRealtimeQuery'
-import {
-  createRealtimeChannel,
-  subscribeToTable,
-  activateChannel,
-  removeChannel,
-} from '@/lib/supabase-realtime'
+import { CACHE } from '@/lib/constants'
+import { useRealtimeSubscription } from '@/components/providers/CentralizedRealtimeProvider'
 
 const CONVERSATION_KEY = 'inbox-conversation'
 const MESSAGES_KEY = 'inbox-messages'
@@ -34,8 +28,8 @@ export const getMessagesQueryKey = (conversationId: string) => [MESSAGES_KEY, co
 export function useConversation(conversationId: string | null) {
   const queryClient = useQueryClient()
 
-  // Conversation query with real-time updates
-  const conversationQuery = useRealtimeQuery<InboxConversation | null>({
+  // Conversation query
+  const conversationQuery = useQuery<InboxConversation | null>({
     queryKey: getConversationQueryKey(conversationId || ''),
     queryFn: async () => {
       if (!conversationId) return null
@@ -48,12 +42,19 @@ export function useConversation(conversationId: string | null) {
       if (error instanceof Error && error.message.includes('404')) return false
       return failureCount < 3
     },
-    // Real-time
-    table: 'inbox_conversations',
-    events: ['UPDATE'],
-    filter: conversationId ? `id=eq.${conversationId}` : undefined,
-    debounceMs: REALTIME.debounceDefault,
   })
+
+  // Realtime: canal único centralizado (CentralizedRealtimeProvider), filtrado
+  // localmente pelo id da conversa em vez de abrir uma subscription própria.
+  const handleConversationRealtimeEvent = useCallback(
+    (event: { eventType: string; new: Record<string, unknown> | null }) => {
+      if (event.eventType !== 'UPDATE') return
+      if (!conversationId || event.new?.id !== conversationId) return
+      queryClient.invalidateQueries({ queryKey: getConversationQueryKey(conversationId) })
+    },
+    [conversationId, queryClient]
+  )
+  useRealtimeSubscription('inbox_conversations', handleConversationRealtimeEvent, !!conversationId)
 
   // Update mutation
   const updateMutation = useMutation({
@@ -165,7 +166,6 @@ export function useConversation(conversationId: string | null) {
 export function useMessages(conversationId: string | null) {
   const queryClient = useQueryClient()
   const [isSending, setIsSending] = useState(false)
-  const channelRef = useRef<ReturnType<typeof createRealtimeChannel> | null>(null)
 
   // Messages query with infinite scroll
   const messagesQuery = useInfiniteQuery({
@@ -189,48 +189,22 @@ export function useMessages(conversationId: string | null) {
     refetchOnWindowFocus: false,
   })
 
-  // Realtime subscription for new messages
-  useEffect(() => {
-    if (!conversationId) return
+  // Realtime: canal único centralizado (CentralizedRealtimeProvider) em vez de
+  // abrir uma subscription própria por conversa selecionada.
+  const handleMessageRealtimeEvent = useCallback(
+    (event: { eventType: string; new: Record<string, unknown> | null }) => {
+      if (!conversationId) return
 
-    // Create channel for this conversation's messages
-    const channelName = `inbox-messages-${conversationId}-${Date.now()}`
-    const channel = createRealtimeChannel(channelName)
-
-    if (!channel) {
-      console.warn('[useMessages] Supabase not configured, skipping realtime')
-      return
-    }
-
-    channelRef.current = channel
-
-    // Subscribe to INSERT events (new messages)
-    subscribeToTable(
-      channel,
-      'inbox_messages',
-      'INSERT',
-      (payload) => {
-        // Only refetch if the message is for this conversation
-        const newRecord = payload.new as { conversation_id?: string }
+      if (event.eventType === 'INSERT') {
+        const newRecord = event.new as { conversation_id?: string } | null
         if (newRecord?.conversation_id === conversationId) {
-          // Invalidate to trigger refetch
           queryClient.invalidateQueries({
             queryKey: getMessagesQueryKey(conversationId),
           })
         }
-      },
-      `conversation_id=eq.${conversationId}`
-    )
-
-    // Also subscribe to UPDATE events (delivery status changes)
-    subscribeToTable(
-      channel,
-      'inbox_messages',
-      'UPDATE',
-      (payload) => {
-        const updatedRecord = payload.new as unknown as InboxMessage
+      } else if (event.eventType === 'UPDATE') {
+        const updatedRecord = event.new as unknown as InboxMessage | null
         if (updatedRecord?.conversation_id === conversationId) {
-          // Update the specific message in cache (optimistic)
           queryClient.setQueryData(
             getMessagesQueryKey(conversationId),
             (old: typeof messagesQuery.data) => {
@@ -247,23 +221,11 @@ export function useMessages(conversationId: string | null) {
             }
           )
         }
-      },
-      `conversation_id=eq.${conversationId}`
-    )
-
-    // Activate the channel
-    activateChannel(channel).catch((err) => {
-      console.error('[useMessages] Failed to subscribe to inbox_messages:', err)
-    })
-
-    // Cleanup on unmount or conversationId change
-    return () => {
-      if (channelRef.current) {
-        removeChannel(channelRef.current)
-        channelRef.current = null
       }
-    }
-  }, [conversationId, queryClient])
+    },
+    [conversationId, queryClient]
+  )
+  useRealtimeSubscription('inbox_messages', handleMessageRealtimeEvent, !!conversationId)
 
   // Flatten messages from all pages
   // IMPORTANT: Reverse pages order because newer pages are added at the end by React Query,

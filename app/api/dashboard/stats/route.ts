@@ -4,13 +4,47 @@ import { supabase } from '@/lib/supabase'
 // Allow 60s cache on Vercel Edge - dashboard uses realtime/polling for updates
 export const revalidate = 60
 
+// Formato do gráfico de 30 dias consumido pelo dashboard
+interface ChartDataPoint {
+  name: string
+  sent: number
+  read: number
+  delivered: number
+  failed: number
+  active: number
+}
+
+async function getChartData(): Promise<ChartDataPoint[]> {
+  // Agregação diária calculada no Postgres (migration 20260730000000) -
+  // evita baixar TODAS as campanhas para agregar no client.
+  const { data, error } = await supabase.rpc('get_campaign_daily_stats', { p_days: 30 })
+
+  if (error || !data) {
+    // RPC ainda não aplicada (migration pendente) - dashboard funciona sem o gráfico
+    console.warn('[dashboard/stats] get_campaign_daily_stats indisponível:', error?.message)
+    return []
+  }
+
+  return (data as Array<{ day: string; sent: number; delivered: number; read: number; failed: number; active: number }>).map((row) => {
+    const [year, month, day] = row.day.split('-')
+    return {
+      name: `${day}/${month}`,
+      sent: row.sent,
+      read: row.read,
+      delivered: row.delivered,
+      failed: row.failed,
+      active: row.active,
+    }
+  })
+}
+
 export async function GET() {
   try {
     // Try to use pre-aggregated view first (migration 0033)
-    const { data: viewData, error: viewError } = await supabase
-      .from('campaign_stats_summary')
-      .select('*')
-      .single()
+    const [{ data: viewData, error: viewError }, chartData] = await Promise.all([
+      supabase.from('campaign_stats_summary').select('*').single(),
+      getChartData(),
+    ])
 
     // View exists and returned data - use optimized path
     if (!viewError && viewData) {
@@ -31,6 +65,7 @@ export async function GET() {
         sent24h: viewData.sent_24h || 0,
         delivered24h: viewData.delivered_24h || 0,
         failed24h: viewData.failed_24h || 0,
+        chartData,
       })
     }
 
@@ -79,6 +114,7 @@ export async function GET() {
       totalFailed,
       activeCampaigns,
       deliveryRate,
+      chartData,
     })
   } catch (error) {
     console.error('Error fetching dashboard stats:', error)
