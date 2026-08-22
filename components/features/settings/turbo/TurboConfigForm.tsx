@@ -49,10 +49,10 @@ export const TURBO_PRESETS = {
   },
   altoVolume: {
     label: 'Turbo XL (Alto Volume)',
-    desc: 'Para campanhas grandes (2 mil+ contatos): concorrencia bem mais alta para nao depender so do mps (throughput real = concurrency / latencia). Recomendado para contas com tier 10K+ e boa qualidade (verde/amarela).',
+    desc: 'Para campanhas grandes (2 mil+ contatos): concorrencia bem mais alta para nao depender so do mps (throughput real = concurrency / latencia). batchSize calibrado para o teto de 60s de function do plano Hobby da Vercel. Recomendado para contas com tier 10K+ e boa qualidade (verde/amarela).',
     values: {
       sendConcurrency: 15,
-      batchSize: 100,
+      batchSize: 60,
       startMps: 40,
       maxMps: 90,
       minMps: 10,

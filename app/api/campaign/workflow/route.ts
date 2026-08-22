@@ -20,8 +20,11 @@ import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 // do que um batch grande precisa) e mata a function no meio do processamento.
 // Cada "batch" (context.run) é uma invocação HTTP real, então precisa de teto
 // alto o suficiente para batchSize/sendConcurrency mais agressivos (ex.: Turbo XL).
+// ATENÇÃO: este projeto está no plano Hobby da Vercel, cujo teto MÁXIMO de
+// duração de function é 60s (valores maiores que isso falham o deploy ou são
+// rejeitados). Se um dia migrar para Pro, dá pra subir isso com folga (até 300s).
 export const runtime = 'nodejs'
-export const maxDuration = 300
+export const maxDuration = 60
 
 function hashConfig(input: unknown): string {
   // Observação: o objetivo é agrupar configs; não precisamos de criptografia forte aqui.
