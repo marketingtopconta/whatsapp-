@@ -16,6 +16,13 @@ import { createHash } from 'crypto'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 
+// IMPORTANTE: sem isso, o Vercel aplica o default do plano (pode ser bem abaixo
+// do que um batch grande precisa) e mata a function no meio do processamento.
+// Cada "batch" (context.run) é uma invocação HTTP real, então precisa de teto
+// alto o suficiente para batchSize/sendConcurrency mais agressivos (ex.: Turbo XL).
+export const runtime = 'nodejs'
+export const maxDuration = 300
+
 function hashConfig(input: unknown): string {
   // Observação: o objetivo é agrupar configs; não precisamos de criptografia forte aqui.
   // JSON.stringify é estável o suficiente porque este objeto tem chaves fixas.
@@ -330,11 +337,21 @@ async function claimPendingForSend(
   return claimed ? now : null
 }
 
+// Se um step (batch) morre no meio (timeout da function, deploy, crash), os
+// contatos já foram marcados 'sending' mas nunca chegam a 'sent'/'failed'/'skipped'.
+// Quando o QStash retenta o step, o claim original (só pega 'pending') encontra
+// 0 linhas pending e PULA o batch inteiro — os contatos ficam presos em 'sending'
+// para sempre, mesmo com a campanha marcada como Concluída (bug real já visto em
+// produção nesta conta: 144 contatos presos em 8 campanhas antigas).
+// Fix: tratar 'sending' "velho" (mais antigo que o teto de tempo de um batch) como
+// reclamável de novo, igual 'pending'.
+const STALE_SENDING_MINUTES = 10
+
 async function bulkClaimPendingForSend(
   campaignId: string,
   contacts: Array<{ contactId: string }>,
   traceId?: string
-): Promise<{ claimedAt: string | null; claimedIds: Set<string> }> {
+): Promise<{ claimedAt: string | null; claimedIds: Set<string>; reclaimedStaleCount: number }> {
   const ids = Array.from(
     new Set(
       (contacts || [])
@@ -343,24 +360,43 @@ async function bulkClaimPendingForSend(
     )
   )
 
-  if (ids.length === 0) return { claimedAt: null, claimedIds: new Set() }
+  if (ids.length === 0) return { claimedAt: null, claimedIds: new Set(), reclaimedStaleCount: 0 }
 
   const now = new Date().toISOString()
+  const staleBeforeIso = new Date(Date.now() - STALE_SENDING_MINUTES * 60 * 1000).toISOString()
+
+  // Descobre quantos dos contatos já estavam 'sending' e travados (para trace/log).
+  const { data: staleRows } = await supabase
+    .from('campaign_contacts')
+    .select('contact_id')
+    .eq('campaign_id', campaignId)
+    .eq('status', 'sending')
+    .lt('sending_at', staleBeforeIso)
+    .in('contact_id', ids)
+
+  const staleIds = new Set<string>((staleRows || []).map((r: any) => String(r.contact_id)))
+
   const { data, error } = await supabase
     .from('campaign_contacts')
     .update({ status: 'sending', sending_at: now, trace_id: traceId || null })
     .eq('campaign_id', campaignId)
-    .eq('status', 'pending')
     .in('contact_id', ids)
+    .or(`status.eq.pending,and(status.eq.sending,sending_at.lt.${staleBeforeIso})`)
     .select('contact_id')
 
   if (error) {
     console.warn('[Workflow] Falha no bulk claim pending->sending (seguindo sem enviar):', error)
-    return { claimedAt: null, claimedIds: new Set() }
+    return { claimedAt: null, claimedIds: new Set(), reclaimedStaleCount: 0 }
   }
 
   const claimedIds = new Set<string>((data || []).map((r: any) => String(r.contact_id)))
-  return { claimedAt: claimedIds.size > 0 ? now : null, claimedIds }
+  const reclaimedStaleCount = Array.from(staleIds).filter((id) => claimedIds.has(id)).length
+
+  if (reclaimedStaleCount > 0) {
+    console.warn(`[Workflow] Reclamando ${reclaimedStaleCount} contato(s) presos em 'sending' há mais de ${STALE_SENDING_MINUTES}min (campanha ${campaignId}).`)
+  }
+
+  return { claimedAt: claimedIds.size > 0 ? now : null, claimedIds, reclaimedStaleCount }
 }
 
 /**
@@ -1265,7 +1301,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
           // A partir daqui, só processamos contatos que foram realmente claimados.
           // =====================================================================
           const claimT0 = Date.now()
-          const { claimedAt, claimedIds } = await bulkClaimPendingForSend(
+          const { claimedAt, claimedIds, reclaimedStaleCount } = await bulkClaimPendingForSend(
             campaignId,
             batch.map((c) => ({ contactId: String(c.contactId) })),
             traceId
@@ -1286,6 +1322,7 @@ const workflowHandler = serve<CampaignWorkflowInput>(
             extra: {
               requested: batch.length,
               claimed: claimedIds.size,
+              reclaimedStale: reclaimedStaleCount,
             },
           })
 
