@@ -47,6 +47,20 @@ export const TURBO_PRESETS = {
       sendFloorDelayMs: 0,
     },
   },
+  altoVolume: {
+    label: 'Turbo XL (Alto Volume)',
+    desc: 'Para campanhas grandes (2 mil+ contatos): concorrencia bem mais alta para nao depender so do mps (throughput real = concurrency / latencia). Recomendado para contas com tier 10K+ e boa qualidade (verde/amarela).',
+    values: {
+      sendConcurrency: 15,
+      batchSize: 100,
+      startMps: 40,
+      maxMps: 90,
+      minMps: 10,
+      cooldownSec: 25,
+      minIncreaseGapSec: 10,
+      sendFloorDelayMs: 0,
+    },
+  },
 } as const;
 
 export type TurboPresetKey = keyof typeof TURBO_PRESETS;
