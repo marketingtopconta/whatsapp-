@@ -29,6 +29,7 @@ export type {
 // Utils
 export {
   formatDurationMs,
+  formatEtaMs,
   formatThroughput,
   formatMs,
   getCampaignStatusClass,

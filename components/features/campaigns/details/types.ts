@@ -119,6 +119,10 @@ export interface CampaignStatsGridProps {
   filterStatus?: MessageStatus | null;
   setFilterStatus?: (status: MessageStatus | null) => void;
   setIncludeReadInDelivered?: (value: boolean) => void;
+  // Temporizador da campanha (tempo decorrido / tempo estimado restante)
+  durationValue: string;
+  durationSubvalue: string;
+  durationIsLive: boolean;
 }
 
 export interface CampaignPerformancePanelProps {

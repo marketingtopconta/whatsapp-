@@ -8,6 +8,25 @@ export const formatDurationMs = (ms: number | null | undefined): string => {
   return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
 };
 
+/**
+ * Formata uma duração/estimativa longa (com suporte a horas), usado no
+ * temporizador de "tempo decorrido" / "tempo estimado restante" da campanha.
+ * Diferente de `formatDurationMs` (que nunca mostra horas — usado nas
+ * métricas técnicas de throughput), este é voltado a exibição amigável
+ * pro usuário final.
+ */
+export const formatEtaMs = (ms: number | null | undefined): string => {
+  if (!Number.isFinite(ms as number) || (ms as number) <= 0) return '—';
+  const totalSec = Math.round((ms as number) / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+  if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`;
+  return `${s}s`;
+};
+
 export const formatThroughput = (mps: number | null | undefined): string => {
   if (!Number.isFinite(mps as number) || (mps as number) <= 0) return '—';
   const v = mps as number;

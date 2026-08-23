@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Clock, CheckCircle2, Eye, Ban, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle2, Eye, Ban, AlertCircle, Timer } from 'lucide-react';
 import { MessageStatus } from '@/types';
 import { DetailCard } from './DetailCard';
 import { CampaignStatsGridProps } from './types';
@@ -18,9 +18,19 @@ export const CampaignStatsGrid: React.FC<CampaignStatsGridProps> = ({
   filterStatus,
   setFilterStatus,
   setIncludeReadInDelivered,
+  durationValue,
+  durationSubvalue,
+  durationIsLive,
 }) => {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+      <DetailCard
+        title="Tempo"
+        value={durationValue}
+        subvalue={durationSubvalue}
+        icon={Timer}
+        color={durationIsLive ? '#10b981' : '#a1a1aa'}
+      />
       <DetailCard
         title="Enviadas"
         value={Number(sentCount || 0).toLocaleString()}

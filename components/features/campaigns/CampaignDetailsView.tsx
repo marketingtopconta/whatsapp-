@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { CampaignStatus } from '@/types';
 import { Page } from '@/components/ui/page';
@@ -21,6 +21,7 @@ import {
   CampaignDetailsViewProps,
   getCampaignStatusClass,
   formatScheduledTime,
+  formatEtaMs,
   computeBaselineThroughputMedian,
   computePerfSourceLabel,
   computeLimiterInfo,
@@ -98,6 +99,19 @@ export const CampaignDetailsView: React.FC<CampaignDetailsViewProps> = ({
     return computeLimiterInfo(perf, metrics?.source);
   }, [metrics?.source, perf?.meta_avg_ms, perf?.saw_throughput_429]);
 
+  // Temporizador: força um re-render a cada segundo enquanto a campanha está
+  // enviando, para o "tempo decorrido" e a estimativa de conclusão avançarem
+  // sozinhos na tela, sem precisar de refresh/polling do usuário.
+  // IMPORTANTE: precisa ficar antes dos `return` condicionais abaixo (regra dos Hooks),
+  // por isso usa optional chaining em `campaign?.status` em vez de `isSendingNow`.
+  const [, forceTimerTick] = useState(0);
+  const isSendingNowForTimer = campaign?.status === CampaignStatus.SENDING;
+  useEffect(() => {
+    if (!isSendingNowForTimer) return;
+    const interval = setInterval(() => forceTimerTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [isSendingNowForTimer]);
+
   // Loading state
   if (isLoading || !campaign) {
     return <div className="p-10 text-center text-gray-500">Carregando...</div>;
@@ -135,6 +149,28 @@ export const CampaignDetailsView: React.FC<CampaignDetailsViewProps> = ({
 
   // Performance metrics (live)
   const isSendingNow = campaign.status === CampaignStatus.SENDING;
+  const isCompletedNow = campaign.status === CampaignStatus.COMPLETED;
+
+  const startedAtMs = campaign.startedAt ? new Date(campaign.startedAt).getTime() : null;
+  const completedAtMs = campaign.completedAt ? new Date(campaign.completedAt).getTime() : null;
+  const elapsedMs = startedAtMs ? (completedAtMs ?? Date.now()) - startedAtMs : null;
+
+  // Estimativa de tempo restante: usa a taxa observada até agora (processados / tempo decorrido)
+  // e projeta pros contatos que ainda faltam. Simples de propósito — não depende das métricas
+  // avançadas (dev-only) de campaign_run_metrics, então funciona pra qualquer usuário.
+  const processedForRate = sentCountForUi + deliveredTotalForUi + failedCountForUi;
+  const pendingForEta = Math.max(0, (campaign.recipients ?? 0) - processedForRate - skippedCount);
+  const rateMsgsPerMs = (elapsedMs && elapsedMs > 0 && processedForRate > 0) ? processedForRate / elapsedMs : null;
+  const etaMs = (isSendingNow && rateMsgsPerMs && pendingForEta > 0) ? pendingForEta / rateMsgsPerMs : null;
+
+  const durationValue = (isSendingNow || isCompletedNow) ? formatEtaMs(elapsedMs) : '—';
+  const durationSubvalue = isCompletedNow
+    ? 'Concluida'
+    : isSendingNow
+      ? (etaMs != null ? `~${formatEtaMs(etaMs)} restantes` : 'Calculando estimativa...')
+      : (campaign.status === CampaignStatus.CANCELLED ? 'Cancelada' : 'Ainda nao iniciou');
+  const durationIsLive = isSendingNow;
+
   const dispatchStartIso = (perf as any)?.first_dispatch_at || (campaign as any)?.firstDispatchAt || null;
   const dispatchEndIsoFromDb = (perf as any)?.last_sent_at || (campaign as any)?.lastSentAt || null;
   const dispatchEndIsoEstimated = (!dispatchEndIsoFromDb && isSendingNow && dispatchStartIso)
@@ -211,6 +247,9 @@ export const CampaignDetailsView: React.FC<CampaignDetailsViewProps> = ({
         filterStatus={filterStatus}
         setFilterStatus={setFilterStatus}
         setIncludeReadInDelivered={setIncludeReadInDelivered}
+        durationValue={durationValue}
+        durationSubvalue={durationSubvalue}
+        durationIsLive={durationIsLive}
       />
 
       {/* Flow/MiniApp Panel - exibido apenas se a campanha usa Flow */}
