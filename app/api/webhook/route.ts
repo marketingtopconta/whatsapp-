@@ -563,13 +563,21 @@ export async function POST(request: NextRequest) {
     entryCount: Array.isArray(body?.entry) ? body.entry.length : 0,
   }))
 
-  // OTIMIZAÇÃO V2: Paraleliza busca de defaultWorkflowId + keywordWorkflows
+  // OTIMIZAÇÃO V2: Paraleliza busca de defaultWorkflowId + keywordWorkflows + credenciais
   // Antes: 2 queries sequenciais (~200ms cada)
   // Depois: 1 batch paralelo (~200ms total)
-  const [defaultWorkflowIdFromDb, allKeywordWorkflows] = await Promise.all([
+  const [defaultWorkflowIdFromDb, allKeywordWorkflows, webhookCredentials] = await Promise.all([
     settingsDb.get('workflow_builder_default_id'),
     loadKeywordWorkflows(null), // Carrega todos, filtra depois
+    getWhatsAppCredentials(),
   ])
+
+  // Uma WABA pode ter mais de um phone_number_id registrado (usado por outra
+  // plataforma/cliente). O webhook do Meta é assinado a nível de WABA, então
+  // eventos de OUTRO número na mesma WABA também chegam aqui. Sem esse filtro,
+  // mensagens/status de outro número vazam pro inbox desta conta (confirmado em
+  // produção: conversas de números que nunca foram contato desta conta).
+  const configuredPhoneNumberId = webhookCredentials?.phoneNumberId || null
 
   const defaultWorkflowId =
     defaultWorkflowIdFromDb ||
@@ -588,6 +596,19 @@ export async function POST(request: NextRequest) {
       const changes = entry.changes || []
 
       for (const change of changes) {
+        // Guard: ignora mensagens/status de um phone_number_id diferente do
+        // configurado nesta conta. Template status updates NÃO são filtrados
+        // aqui (são a nível de WABA, não vêm com phone_number_id).
+        const eventPhoneNumberId = change?.value?.metadata?.phone_number_id || null
+        const isForeignPhoneNumber = Boolean(
+          configuredPhoneNumberId && eventPhoneNumberId && eventPhoneNumberId !== configuredPhoneNumberId
+        )
+        if (isForeignPhoneNumber) {
+          console.warn(
+            `[Webhook] Ignorando evento de phone_number_id ${eventPhoneNumberId} (configurado: ${configuredPhoneNumberId})`
+          )
+        }
+
         // =========================================================
         // Template Status Updates (Meta)
         // =========================================================
@@ -658,7 +679,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        const statuses = change.value?.statuses || []
+        const statuses = isForeignPhoneNumber ? [] : (change.value?.statuses || [])
 
         // =========================================================
         // Message Status Updates (durável + idempotente)
@@ -939,7 +960,7 @@ export async function POST(request: NextRequest) {
         // =====================================================================
         // Process incoming messages (Chatbot Engine Disabled in Template)
         // =====================================================================
-        const messages = change.value?.messages || []
+        const messages = isForeignPhoneNumber ? [] : (change.value?.messages || [])
         for (const message of messages) {
           const from = message.from
           const messageType = message.type
