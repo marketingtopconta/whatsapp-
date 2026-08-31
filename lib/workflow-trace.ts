@@ -88,7 +88,12 @@ const DEFAULT_PERSIST_PHASES = new Set<string>([
   'db_bulk_upsert_contacts',
   'contact_exception',
   // Observabilidade de envio
-  'meta_send_ok',
+  // NOTA: 'meta_send_ok' foi removido do default de propósito (2026-08-31).
+  // Cada envio bem-sucedido já grava o status em campaign_contacts (updateContactStatus) —
+  // persistir também aqui duplicava a escrita no banco por contato (ex.: campanha de
+  // 2 mil contatos = +2 mil INSERTs só de log, no mesmo pico de carga do disparo).
+  // Erros continuam sempre persistidos (ok === false, ver shouldPersistEvent), e dá pra
+  // reativar tudo pontualmente com WORKFLOW_TRACE_PERSIST_ALL=1 durante uma investigação.
   'meta_send_fail',
   // Retry / refresh de template (mídia weblink 403)
   'template_refresh_retry_start',
