@@ -570,7 +570,23 @@ export async function POST(request: NextRequest) {
   const validContacts: DispatchContactResolved[] = []
   const skippedContacts: Array<{ contact: DispatchContact; code: string; reason: string; normalizedPhone?: string }> = []
 
+  // Pré-check é síncrono e roda em memória (sem I/O por contato), mas para
+  // campanhas grandes (2k+) a soma dos ~2000 precheckContactForTemplate()
+  // pode segurar o event loop por um tempo não-trivial ANTES do dispatch
+  // responder. Numa function serverless que reaproveita a instância entre
+  // requisições concorrentes (Fluid Compute), isso atrasa outras requisições
+  // batendo na mesma instância nesse meio-tempo. Cede o event loop a cada
+  // PRECHECK_YIELD_EVERY contatos para não segurar o loop por tempo longo.
+  const PRECHECK_YIELD_EVERY = 200
+  let precheckedSinceYield = 0
+
   for (const c of dedupedInput) {
+    if (precheckedSinceYield >= PRECHECK_YIELD_EVERY) {
+      await new Promise((resolve) => setImmediate(resolve))
+      precheckedSinceYield = 0
+    }
+    precheckedSinceYield += 1
+
     const contactId = c.contactId
 
     // Opt-out global (contacts.status)
