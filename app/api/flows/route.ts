@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
-// Cache GET requests for 5 minutes - flows rarely change
-// POST/PUT/DELETE remain dynamic by default
-export const revalidate = 300
+// IMPORTANTE (2026-09-01): 'revalidate' sozinho faz o Next.js tentar gerar
+// essa rota estaticamente DURANTE O BUILD (executa o GET uma vez para
+// cachear). Se o Supabase estiver indisponivel nesse momento, a rota falha e
+// o Next.js aborta o build inteiro (foi o que travou o deploy de produção -
+// mesmo padrão encontrado em app/api/dashboard/stats). 'force-dynamic'
+// garante que a rota só roda em runtime, por requisição.
+export const dynamic = 'force-dynamic'
 
 import { supabase } from '@/lib/supabase'
 import { settingsDb } from '@/lib/supabase-db'

@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
-// Allow 60s cache on Vercel Edge - dashboard uses realtime/polling for updates
-export const revalidate = 60
+// IMPORTANTE (2026-09-01): 'revalidate' fazia o Next.js tentar gerar essa rota
+// de forma estatica DURANTE O BUILD (executando o GET uma vez para cachear a
+// resposta inicial). Se o Supabase estiver indisponivel nesse momento (como
+// aconteceu em producao), a rota devolve erro e o Next.js aborta o build
+// inteiro por causa disso - nao é so essa rota que fica fora, o deploy inteiro
+// trava. Forçamos 'force-dynamic' para a rota rodar só em runtime (por
+// requisição), sem depender do banco estar de pé no instante do build.
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
