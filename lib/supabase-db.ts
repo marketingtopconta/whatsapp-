@@ -2053,6 +2053,12 @@ export const customFieldDefDb = {
  */
 const SETTINGS_CACHE_PREFIX = 'settings:'
 const SETTINGS_CACHE_TTL = 60 // segundos
+// Chave agregada para getAll() (credenciais do WhatsApp) - evita ida direta
+// ao Postgres em toda chamada. getWhatsAppCredentials() usa getAll() e é
+// chamada com frequencia alta (dispatch, cada lote do workflow, cada evento
+// de webhook) - sem cache aqui, competia por CPU do banco com o proprio
+// disparo (achado do diagnostico de 2026-09-01).
+const SETTINGS_ALL_CACHE_KEY = `${SETTINGS_CACHE_PREFIX}__all__`
 
 export const settingsDb = {
     get: async (key: string): Promise<string | null> => {
@@ -2106,11 +2112,12 @@ export const settingsDb = {
 
         if (error) throw error
 
-        // Invalida cache após update
+        // Invalida cache após update (chave individual + agregado do getAll())
         if (redis) {
             try {
                 const cacheKey = `${SETTINGS_CACHE_PREFIX}${key}`
                 await redis.del(cacheKey)
+                await redis.del(SETTINGS_ALL_CACHE_KEY)
             } catch (e) {
                 // Ignore cache invalidation errors
                 console.warn('[settingsDb] Redis del error:', e)
@@ -2119,6 +2126,20 @@ export const settingsDb = {
     },
 
     getAll: async (): Promise<AppSettings> => {
+        // 1. Tenta buscar do cache Redis (evita ida ao Postgres a cada chamada -
+        // getWhatsAppCredentials() usa getAll() e é chamada com muita frequência)
+        if (redis) {
+            try {
+                const cached = await redis.get<AppSettings>(SETTINGS_ALL_CACHE_KEY)
+                if (cached !== null) {
+                    return cached
+                }
+            } catch (e) {
+                // Redis error - fallback silencioso para DB
+                console.warn('[settingsDb] Redis read error (getAll):', e)
+            }
+        }
+
         const { data, error } = await supabase
             .from('settings')
             .select('key, value')
@@ -2130,12 +2151,24 @@ export const settingsDb = {
                 settings[row.key] = row.value
             })
 
-        return {
+        const result: AppSettings = {
             phoneNumberId: settings.phoneNumberId || '',
             businessAccountId: settings.businessAccountId || '',
             accessToken: settings.accessToken || '',
             isConnected: settings.isConnected === 'true',
         }
+
+        // 2. Armazena no cache para próximas chamadas
+        if (redis) {
+            try {
+                await redis.set(SETTINGS_ALL_CACHE_KEY, result, { ex: SETTINGS_CACHE_TTL })
+            } catch (e) {
+                // Ignore cache write errors
+                console.warn('[settingsDb] Redis write error (getAll):', e)
+            }
+        }
+
+        return result
     },
 
     saveAll: async (settings: AppSettings): Promise<void> => {
