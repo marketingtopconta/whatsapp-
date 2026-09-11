@@ -9,6 +9,7 @@ import { CampaignStatus } from '@/types'
 import { precheckContactForTemplate } from '@/lib/whatsapp/template-contract'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
 import { createHash } from 'crypto'
+import { STALE_SENDING_MINUTES } from '@/lib/campaign-send-constants'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -143,12 +144,13 @@ interface ContactRow {
 /**
  * POST /api/campaigns/[id]/resend-pending
  *
- * Reenfileira contatos que nunca chegaram a ser processados (status='pending')
- * numa campanha CANCELADA ou PAUSADA — cenário típico: campanha cancelada no
- * meio do envio (ex.: config de throttle ruim causando timeout de batch) e
- * sobrou gente que nunca foi tentada. Diferente de resend-skipped (que
- * revalida quem foi pulado por precheck), este endpoint pega quem está
- * simplesmente 'pending' e nunca foi disparado.
+ * Reenfileira contatos que nunca chegaram a ser processados (status='pending'),
+ * incluindo quem ficou preso em 'sending' há mais de STALE_SENDING_MINUTES (batch
+ * que morreu no meio: timeout de function, deploy, Supabase lento etc.), numa
+ * campanha CANCELADA ou PAUSADA — cenário típico: campanha cancelada no meio do
+ * envio e sobrou gente que nunca foi tentada ou ficou travada sem outcome.
+ * Diferente de resend-skipped (que revalida quem foi pulado por precheck), este
+ * endpoint pega quem está 'pending'/'sending' travado e nunca teve um resultado.
  *
  * Não reabre campanhas em andamento (SENDING) — nesse caso o próprio workflow
  * já está processando os pending.
@@ -240,12 +242,17 @@ export async function POST(_request: Request, { params }: Params) {
       }
     }
 
-    // 3) Buscar contatos pending
+    // 3) Buscar contatos pending — inclui também quem ficou preso em 'sending' (batch
+    // que morreu no meio: timeout de function, deploy, Supabase lento etc.) há mais
+    // do que STALE_SENDING_MINUTES. Sem isso, esses contatos nunca eram reenfileirados
+    // por aqui (só 'pending' entrava na lista) e ficavam travados para sempre mesmo
+    // depois de cancelar e chamar este endpoint.
+    const staleBeforeIso = new Date(Date.now() - STALE_SENDING_MINUTES * 60 * 1000).toISOString()
     const { data: pendingRows, error: pendingError } = await supabase
       .from('campaign_contacts')
       .select('id, phone, name, email, contact_id, custom_fields')
       .eq('campaign_id', campaignId)
-      .eq('status', 'pending')
+      .or(`status.eq.pending,and(status.eq.sending,sending_at.lt.${staleBeforeIso})`)
 
     if (pendingError) {
       return NextResponse.json({ error: 'Falha ao buscar pendentes', details: pendingError.message }, { status: 500 })
