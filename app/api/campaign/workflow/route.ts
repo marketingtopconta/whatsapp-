@@ -15,6 +15,7 @@ import { createCampaignProgressBroadcaster, broadcastCampaignPhase } from '@/lib
 import { createHash } from 'crypto'
 import { getWhatsAppCredentials } from '@/lib/whatsapp-credentials'
 import { fetchWithTimeout, safeJson } from '@/lib/server-http'
+import { STALE_SENDING_MINUTES } from '@/lib/campaign-send-constants'
 
 // IMPORTANTE: sem isso, o Vercel aplica o default do plano (pode ser bem abaixo
 // do que um batch grande precisa) e mata a function no meio do processamento.
@@ -348,7 +349,8 @@ async function claimPendingForSend(
 // produção nesta conta: 144 contatos presos em 8 campanhas antigas).
 // Fix: tratar 'sending' "velho" (mais antigo que o teto de tempo de um batch) como
 // reclamável de novo, igual 'pending'.
-const STALE_SENDING_MINUTES = 10
+// (constante compartilhada com resend-pending, que precisa do mesmo teto para incluir
+// contatos presos em 'sending' na lista de reenvio)
 
 async function bulkClaimPendingForSend(
   campaignId: string,
