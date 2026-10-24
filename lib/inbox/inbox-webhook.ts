@@ -67,6 +67,8 @@ export interface InboundMessagePayload {
   mediaUrl?: string | null
   /** Phone number ID that received the message */
   phoneNumberId?: string
+  /** Não aciona a IA (usado no modo de auto-resposta fixa) */
+  skipAI?: boolean
 }
 
 export interface StatusUpdatePayload {
@@ -137,7 +139,7 @@ export async function handleInboundMessage(
           }
         }
 
-        if (currentMode === 'bot') {
+        if (currentMode === 'bot' && !payload.skipAI) {
           if (isAutomationPaused(result.automation_paused_until)) {
             console.log(`[Inbox] Automation paused until ${result.automation_paused_until}, skipping AI`)
           } else {
@@ -247,7 +249,7 @@ async function handleInboundMessageLegacy(
     currentMode = 'bot'
   }
 
-  if (currentMode === 'bot' && !isAutomationPaused(conversation.automation_paused_until)) {
+  if (currentMode === 'bot' && !payload.skipAI && !isAutomationPaused(conversation.automation_paused_until)) {
     triggeredAI = await triggerAIProcessing(conversation as InboxConversation, message)
   }
 

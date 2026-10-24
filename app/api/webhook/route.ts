@@ -41,6 +41,7 @@ import {
   handleInboundMessage,
   handleDeliveryStatus,
 } from '@/lib/inbox/inbox-webhook'
+import { isInfoOnlyAutoReplyEnabled, sendInfoOnlyAutoReply } from '@/lib/inbox/info-autoreply'
 
 // Get WhatsApp Access Token from centralized helper
 async function getWhatsAppAccessToken(): Promise<string | null> {
@@ -972,6 +973,7 @@ export async function POST(request: NextRequest) {
           // T046-T047: Persist to Inbox and trigger AI if mode=bot
           // =================================================================
           try {
+            const infoOnly = await isInfoOnlyAutoReplyEnabled()
             const inboxResult = await handleInboundMessage({
               messageId: message.id || '',
               from,
@@ -980,7 +982,12 @@ export async function POST(request: NextRequest) {
               timestamp: message.timestamp,
               mediaUrl: message.image?.url || message.video?.url || message.audio?.url || message.document?.url || null,
               phoneNumberId: phoneNumberId || undefined,
+              skipAI: infoOnly,
             })
+            if (infoOnly) {
+              // Canal apenas informativo: responde com aviso fixo, sem IA
+              await sendInfoOnlyAutoReply({ conversationId: inboxResult.conversationId, phone: from })
+            }
             console.log(`📥 Inbox: conversation=${inboxResult.conversationId}, message=${inboxResult.messageId}, ai=${inboxResult.triggeredAI}`)
           } catch (inboxError) {
             // Best-effort: don't fail webhook if inbox persist fails
