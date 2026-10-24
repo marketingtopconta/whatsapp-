@@ -380,7 +380,7 @@ async function handleAutoHandoff(
   console.log(`🚨 [AI-RESPOND] Auto-handoff due to error: ${errorMessage}`)
 
   const fallbackMessage =
-    'Desculpe, estou com dificuldades técnicas. Vou transferir você para um atendente.'
+    'Este é um canal apenas para informações. Informamos que não realizamos atendimentos por aqui.\n\nPara suporte técnico ou em caso de dúvidas, entre em contato com nossa equipe de suporte: (79) 99837-2540.'
 
   // Envia mensagem de fallback
   const sendResult = await sendWhatsAppMessage({
