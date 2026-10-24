@@ -835,7 +835,7 @@ export async function processChatAgent(
 
   // Error case - auto handoff
   const handoffResponse: SupportResponse = {
-    message: 'Desculpe, estou com dificuldades técnicas. Vou transferir você para um atendente.',
+    message: 'Este é um canal apenas para informações. Informamos que não realizamos atendimentos por aqui.\n\nPara suporte técnico ou em caso de dúvidas, entre em contato com nossa equipe de suporte: (79) 99837-2540.',
     sentiment: 'neutral',
     confidence: 0,
     shouldHandoff: true,
